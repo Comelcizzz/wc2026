@@ -15,6 +15,9 @@ export default function MatchComments({
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [open, setOpen] = useState(false);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
 
   async function load() {
     try {
@@ -30,6 +33,14 @@ export default function MatchComments({
     return () => clearInterval(i);
   }, [matchId, open]);
 
+  useEffect(() => {
+    if (!identified) return;
+    fetch('/api/login', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => setPlayerId(d?.id || null))
+      .catch(() => {});
+  }, [identified]);
+
   async function send() {
     if (!text.trim()) return;
     setSending(true);
@@ -39,6 +50,39 @@ export default function MatchComments({
       setText('');
       load();
     }
+  }
+
+  function startEdit(comment: MatchComment) {
+    setEditingId(comment.id);
+    setEditingText(comment.text);
+  }
+
+  async function saveEdit(commentId: string) {
+    if (!editingText.trim()) return;
+    setSending(true);
+    const r = await fetch('/api/comments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId, commentId, text: editingText.trim() }),
+    }).then((x) => x.json());
+    setSending(false);
+    if (r.ok) {
+      setEditingId(null);
+      setEditingText('');
+      load();
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    if (!window.confirm('Delete this comment?')) return;
+    setSending(true);
+    const r = await fetch('/api/comments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId, commentId }),
+    }).then((x) => x.json());
+    setSending(false);
+    if (r.ok) load();
   }
 
   return (
@@ -54,9 +98,35 @@ export default function MatchComments({
             ) : (
               comments.map((c) => (
                 <div className="match-comment" key={c.id}>
-                  <strong>{displayName(c.authorName)}</strong>
-                  <span className="muted small">{formatTime(c.createdAt)}</span>
-                  <p>{c.text}</p>
+                  <div className="match-comment-head">
+                    <strong>{displayName(c.authorName)}</strong>
+                    <span className="muted small">{formatTime(c.createdAt)}</span>
+                  </div>
+                  {editingId === c.id ? (
+                    <div className="match-comment-edit">
+                      <input
+                        type="text"
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveEdit(c.id)}
+                        maxLength={400}
+                      />
+                      <button className="btn btn-secondary btn-sm" disabled={sending || !editingText.trim()} onClick={() => saveEdit(c.id)}>
+                        Save
+                      </button>
+                      <button className="btn btn-ghost btn-sm" disabled={sending} onClick={() => setEditingId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <p>{c.text}</p>
+                  )}
+                  {playerId === c.authorId && editingId !== c.id && (
+                    <div className="match-comment-actions">
+                      <button type="button" onClick={() => startEdit(c)}>Edit</button>
+                      <button type="button" onClick={() => deleteComment(c.id)}>Delete</button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
