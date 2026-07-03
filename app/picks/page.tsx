@@ -1,9 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Countdown from '@/components/Countdown';
+import ClosingSoonBanner from '@/components/ClosingSoonBanner';
+import MatchPickCountdown from '@/components/MatchPickCountdown';
+import MatchComments from '@/components/MatchComments';
 import { getPool, postJSON, type PoolResponse } from '@/lib/clientApi';
 import { getCachedPool } from '@/lib/usePool';
-import { resolveKoTeams } from '@/lib/bracket';
+import { resolvePickTeams, isR16RepickOpen, resultsFromMatches } from '@/lib/bracket';
+import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { gradeGroupMatch, gradeKoMatch } from '@/lib/scoring';
 import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS, TEAMS } from '@/lib/tournament';
@@ -137,12 +141,17 @@ export default function PicksPage() {
   }
 
   const bracket = pool?.koBracket;
+  const koResultsMap = useMemo(
+    () => (pool ? resultsFromMatches(pool.matches) : {}),
+    [pool],
+  );
   const resolved = useMemo(() => {
     const map: Record<string, { home: string | null; away: string | null } | null> = {};
     if (!bracket) return map;
-    for (const m of KO_MATCH_IDS) map[m.id] = resolveKoTeams(m.id, koPicks, bracket);
+    for (const m of KO_MATCH_IDS) map[m.id] = resolvePickTeams(m.id, koPicks, bracket, koResultsMap);
     return map;
-  }, [koPicks, bracket]);
+  }, [koPicks, bracket, koResultsMap]);
+  const r16RepickOpen = isR16RepickOpen(koResultsMap);
 
   function setScore(id: string, side: 'h' | 'a', val: string) {
     setKoPicks((prev) => {
@@ -307,6 +316,8 @@ export default function PicksPage() {
         <Countdown deadline={pool.settings.picksDeadline} />
       </section>
 
+      {identified && bracketOpen && <ClosingSoonBanner nowIso={pool.now} />}
+
       {!identified ? (
         idChecking ? (
           <div className="card muted" style={{ textAlign: 'center', padding: 36 }}>
@@ -373,6 +384,16 @@ export default function PicksPage() {
                 </div>
               )}
 
+              {r16RepickOpen && pageTab === 'r16' && !pool.locked && (
+                <div className="card repick-banner">
+                  <strong>Раунд 16 відкрито для нових піків</strong>
+                  <p className="muted small" style={{ marginTop: 6 }}>
+                    Усі матчі 1/16 фіналу завершені — тепер ви бачите реальні пари команд. Оновіть свої
+                    прогнози до закриття кожного матчу (за 1 годину до початку).
+                  </p>
+                </div>
+              )}
+
               {pageTab === 'bracket' ? (
                 <BracketBoard resolved={resolved} koPicks={koPicks} setScore={setScore} setEt={setEt} />
               ) : (
@@ -384,6 +405,7 @@ export default function PicksPage() {
                   setEt={setEt}
                   results={koResults}
                   readOnly={pool.locked}
+                  identified={identified}
                 />
               )}
 
@@ -440,7 +462,7 @@ export default function PicksPage() {
                     Clear all
                   </button>
                   <span className="muted small">
-                    Save any time — pick a few rounds now and finish the rest later, edit until the deadline.
+                    Save any time — each match locks 1 hour before kickoff. Pick a few rounds now and finish later.
                   </span>
                 </div>
               )}
@@ -740,6 +762,7 @@ function RoundView({
   setEt,
   results,
   readOnly,
+  identified,
 }: {
   round: Round;
   resolved: Record<string, { home: string | null; away: string | null } | null>;
@@ -748,6 +771,7 @@ function RoundView({
   setEt: (id: string, team: string) => void;
   results: Record<string, MatchResult>;
   readOnly: boolean;
+  identified: boolean;
 }) {
   const matches = useMemo(() => KO_MATCH_IDS.filter((m) => m.round === round), [round]);
   const ready = matches.filter((m) => {
@@ -787,6 +811,7 @@ function RoundView({
                 setEt={setEt}
                 result={results[match.id]}
                 readOnly={readOnly}
+                identified={identified}
               />
             ))}
           </div>
@@ -804,6 +829,7 @@ function ListMatchCard({
   setEt,
   result,
   readOnly,
+  identified,
 }: {
   match: { id: string; round: Round; label: string };
   teams: { home: string | null; away: string | null } | null;
@@ -812,21 +838,24 @@ function ListMatchCard({
   setEt: (id: string, team: string) => void;
   result?: MatchResult;
   readOnly?: boolean;
+  identified?: boolean;
 }) {
   const home = teams?.home;
   const away = teams?.away;
   const ready = !!home && !!away;
-  const locked = readOnly || !ready;
+  const matchLocked = isMatchPickLocked(match.id);
+  const locked = readOnly || !ready || matchLocked;
   const isDraw = pick && Number.isInteger(pick.h) && Number.isInteger(pick.a) && pick.h === pick.a;
   const meta = KO_META[match.id];
   const graded =
     result && result.winner ? gradeChrome(gradeKoMatch(match.round, pick, teams ?? null, result).status, 0).cls : '';
 
   return (
-    <div className={`match-card${!ready ? ' locked' : ''}${graded ? ` graded-${graded}` : ''}`}>
+    <div className={`match-card${!ready ? ' locked' : ''}${matchLocked ? ' match-pick-closed' : ''}${graded ? ` graded-${graded}` : ''}`}>
       <div className="match-meta">
         <span>M{meta?.m ?? match.id}</span>
         <span>{meta?.date}</span>
+        {ready && <MatchPickCountdown matchId={match.id} />}
       </div>
       <div className="score-row">
         <span className={`team-name${!home ? ' tbd' : ''}`}>
@@ -854,20 +883,24 @@ function ListMatchCard({
         </span>
       </div>
       {!ready && <div className="ko-not-ready">Complete feeder matches first</div>}
+      {ready && matchLocked && !readOnly && (
+        <div className="ko-not-ready urgent">Цей матч закрито — вибір рахунку закрився за годину до початку</div>
+      )}
       {ready && isDraw && (
         <div className="et-row">
           <span className="muted">ET / pens winner</span>
           <div>
-            <button className={`et-btn${pick?.et === home ? ' sel' : ''}`} disabled={readOnly} onClick={() => setEt(match.id, home!)}>
+            <button className={`et-btn${pick?.et === home ? ' sel' : ''}`} disabled={locked} onClick={() => setEt(match.id, home!)}>
               {home}
             </button>
-            <button className={`et-btn${pick?.et === away ? ' sel' : ''}`} disabled={readOnly} onClick={() => setEt(match.id, away!)}>
+            <button className={`et-btn${pick?.et === away ? ' sel' : ''}`} disabled={locked} onClick={() => setEt(match.id, away!)}>
               {away}
             </button>
           </div>
         </div>
       )}
       <KoResultStrip match={match} teams={teams} pick={pick} result={result} />
+      <MatchComments matchId={match.id} identified={!!identified} />
     </div>
   );
 }

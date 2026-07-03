@@ -65,6 +65,8 @@ function normalize(data: PoolData): PoolData {
     data.koBracket = { r32: [], locked: false };
   }
   if (!data.koBracket.r32) data.koBracket.r32 = [];
+  if (!data.chat) data.chat = [];
+  if (!data.matchComments) data.matchComments = {};
   if (!data.settings.picksDeadline) {
     data.settings.picksDeadline = config.defaultDeadline;
   }
