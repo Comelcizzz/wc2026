@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { formatDuration, matchesClosingSoon, upcomingOpenMatches } from '@/lib/matchSchedule';
-import { ROUND_LABELS } from '@/lib/tournament';
+import { KO_META, ROUND_LABELS } from '@/lib/tournament';
+import TeamFlag from '@/components/TeamFlag';
 import type { KoPicks, Round } from '@/lib/types';
 import type { UpcomingMatch } from '@/lib/matchSchedule';
 
@@ -10,11 +11,13 @@ export default function ClosingSoonBanner({
   maxRound,
   matchIds,
   koPicks,
+  teamsById,
 }: {
   nowIso?: string;
   maxRound: Round;
   matchIds: string[];
   koPicks: KoPicks;
+  teamsById: Record<string, { home: string | null; away: string | null } | null>;
 }) {
   const [now, setNow] = useState(() => (nowIso ? new Date(nowIso).getTime() : Date.now()));
 
@@ -39,8 +42,15 @@ export default function ClosingSoonBanner({
             Score picks close 1 hour before kickoff (Toronto time). Do not leave points on the table.
           </span>
           <div className="closing-soon-list">
-            {closing.slice(0, 2).map((m) => (
-              <ClosingMatchChip key={m.id} match={m} now={now} picked={hasPick(koPicks[m.id])} urgent />
+            {closing.slice(0, 3).map((m) => (
+              <ClosingMatchCard
+                key={m.id}
+                match={m}
+                now={now}
+                picked={hasPick(koPicks[m.id])}
+                teams={teamsById[m.id]}
+                urgent
+              />
             ))}
           </div>
         </div>
@@ -50,7 +60,13 @@ export default function ClosingSoonBanner({
           <strong>Up next · through {ROUND_LABELS[maxRound]}</strong>
           <div className="closing-soon-list">
             {upcoming.map((m) => (
-              <ClosingMatchChip key={m.id} match={m} now={now} picked={hasPick(koPicks[m.id])} />
+              <ClosingMatchCard
+                key={m.id}
+                match={m}
+                now={now}
+                picked={hasPick(koPicks[m.id])}
+                teams={teamsById[m.id]}
+              />
             ))}
           </div>
         </div>
@@ -59,28 +75,57 @@ export default function ClosingSoonBanner({
   );
 }
 
-function ClosingMatchChip({
+function ClosingMatchCard({
   match,
   now,
   picked,
+  teams,
   urgent,
 }: {
   match: UpcomingMatch;
   now: number;
   picked: boolean;
+  teams: { home: string | null; away: string | null } | null | undefined;
   urgent?: boolean;
 }) {
   const closeMs = Math.max(0, match.closeMs - (Date.now() - now));
+  const meta = KO_META[match.id];
+  const closeAt = new Date(Date.now() + closeMs).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
   const nudge = picked
     ? 'Pick saved'
     : urgent
       ? 'Hurry up — this one is almost gone'
       : 'No pick yet — get it in early';
   return (
-    <div className={`closing-match-chip${urgent ? ' urgent' : ''}`}>
-      <span className="cmc-round">{ROUND_LABELS[match.round]}</span>
-      <span className="cmc-label">{match.kickoffLabel}</span>
-      <span className="cmc-time">locks in {formatDuration(closeMs)}</span>
+    <div className={`closing-match-card${urgent ? ' urgent' : ''}${picked ? ' picked' : ''}`}>
+      <div className="cmc-topline">
+        <span className="cmc-round">{ROUND_LABELS[match.round]}</span>
+        <span className={`cmc-status${picked ? ' picked' : ''}`}>{picked ? 'Saved' : 'Needs pick'}</span>
+      </div>
+      <div className="cmc-match-meta">
+        <span>M{meta?.m ?? match.id}</span>
+        <span>Kickoff {match.kickoffLabel}</span>
+      </div>
+      <div className="cmc-teams">
+        <span className="cmc-team">
+          <TeamFlag team={teams?.home || null} size={18} />
+          {teams?.home || 'TBD'}
+        </span>
+        <span className="cmc-vs">vs</span>
+        <span className="cmc-team right">
+          {teams?.away || 'TBD'}
+          <TeamFlag team={teams?.away || null} size={18} className="right" />
+        </span>
+      </div>
+      <div className="cmc-lock-row">
+        <strong>{urgent ? 'Locks soon' : 'Locks'}</strong>
+        <span>{formatDuration(closeMs)} · {closeAt}</span>
+      </div>
       <span className={`cmc-nudge${picked ? ' picked' : ''}`}>{nudge}</span>
     </div>
   );

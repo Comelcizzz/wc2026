@@ -13,10 +13,10 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const id = getPlayerId();
-    if (!id) return NextResponse.json({ ok: true, name: null });
+    if (!id) return NextResponse.json({ ok: true, id: null, name: null });
     const pool = await readPool();
     const p = pool.participants.find((x) => x.id === id);
-    return NextResponse.json({ ok: true, name: p?.name || null });
+    return NextResponse.json({ ok: true, id: p?.id || null, name: p?.name || null });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }

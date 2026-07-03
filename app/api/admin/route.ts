@@ -16,8 +16,8 @@ const TEAM_SET = new Set(TEAMS);
 
 function fixtureChanged(existing: KoFixture | undefined, next: KoFixture): boolean {
   return !!existing && (
-    (!!existing.home && !!next.home && existing.home !== next.home) ||
-    (!!existing.away && !!next.away && existing.away !== next.away)
+    (!!existing.home && existing.home !== next.home) ||
+    (!!existing.away && existing.away !== next.away)
   );
 }
 

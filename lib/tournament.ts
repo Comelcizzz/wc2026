@@ -81,8 +81,8 @@ export const KO_MATCH_IDS: { id: string; round: Round; label: string }[] = [
   { id: 'R32-14', round: 'r32', label: 'M86 · 1J v 2H' },
   { id: 'R32-15', round: 'r32', label: 'M87 · 1K v 3(D/E/I/J/L)' },
   { id: 'R32-16', round: 'r32', label: 'M88 · 2D v 2G' },
-  { id: 'R16-1', round: 'r16', label: 'M90 · W74 v W77' },
-  { id: 'R16-2', round: 'r16', label: 'M89 · W73 v W75' },
+  { id: 'R16-1', round: 'r16', label: 'M89 · W74 v W77' },
+  { id: 'R16-2', round: 'r16', label: 'M90 · W73 v W75' },
   { id: 'R16-3', round: 'r16', label: 'M91 · W76 v W78' },
   { id: 'R16-4', round: 'r16', label: 'M92 · W79 v W80' },
   { id: 'R16-5', round: 'r16', label: 'M93 · W83 v W84' },
@@ -117,14 +117,14 @@ export const BRACKET_COLUMNS: { key: string; title: string; ids: string[] }[] = 
 // Maps each KO match to its two feeder matches + role (w=winner, l=loser).
 // Graph matches the OFFICIAL FIFA WC 2026 bracket (M89→M104). Home/away order
 // follows the official top/bottom seeding so the picks UI mirrors FIFA exactly.
-//   R16: M89=W73/W75 M90=W74/W77 M91=W76/W78 M92=W79/W80
+//   R16: M89=W74/W77 M90=W73/W75 M91=W76/W78 M92=W79/W80
 //        M93=W83/W84 M94=W81/W82 M95=W86/W88 M96=W85/W87
 //   QF : M97=W89/W90 M98=W93/W94 M99=W91/W92 M100=W95/W96
 //   SF : M101=W97/W98  M102=W99/W100
 //   Final M104=W101/W102 · 3rd M103=loser M101 / loser M102
 export const KO_FEED: Record<string, { src: string; r: 'w' | 'l' }[]> = {
-  'R16-1': [{ src: 'R32-2', r: 'w' }, { src: 'R32-5', r: 'w' }], // M90
-  'R16-2': [{ src: 'R32-1', r: 'w' }, { src: 'R32-3', r: 'w' }], // M89
+  'R16-1': [{ src: 'R32-2', r: 'w' }, { src: 'R32-5', r: 'w' }], // M89
+  'R16-2': [{ src: 'R32-1', r: 'w' }, { src: 'R32-3', r: 'w' }], // M90
   'R16-3': [{ src: 'R32-4', r: 'w' }, { src: 'R32-6', r: 'w' }], // M91
   'R16-4': [{ src: 'R32-7', r: 'w' }, { src: 'R32-8', r: 'w' }], // M92
   'R16-5': [{ src: 'R32-11', r: 'w' }, { src: 'R32-12', r: 'w' }], // M93
@@ -151,7 +151,7 @@ export const KO_META: Record<string, { m: number; date: string }> = {
   'R32-11': { m: 83, date: 'Jul 2 · 19:00' }, 'R32-12': { m: 84, date: 'Jul 2 · 15:00' },
   'R32-13': { m: 85, date: 'Jul 2 · 23:00' }, 'R32-14': { m: 86, date: 'Jul 3 · 18:00' },
   'R32-15': { m: 87, date: 'Jul 3 · 21:30' }, 'R32-16': { m: 88, date: 'Jul 3 · 14:00' },
-  'R16-1': { m: 90, date: 'Jul 4 · 17:00' }, 'R16-2': { m: 89, date: 'Jul 4 · 13:00' },
+  'R16-1': { m: 89, date: 'Jul 4 · 17:00' }, 'R16-2': { m: 90, date: 'Jul 4 · 13:00' },
   'R16-3': { m: 91, date: 'Jul 5 · 16:00' }, 'R16-4': { m: 92, date: 'Jul 5 · 20:00' },
   'R16-5': { m: 93, date: 'Jul 6 · 15:00' }, 'R16-6': { m: 94, date: 'Jul 6 · 20:00' },
   'R16-7': { m: 95, date: 'Jul 7 · 12:00' }, 'R16-8': { m: 96, date: 'Jul 7 · 16:00' },
