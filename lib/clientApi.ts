@@ -9,6 +9,7 @@ export interface PoolResponse {
   matches: Match[];
   participants: Participant[];
   standings: ScoredParticipant[];
+  commentCounts: Record<string, number>;
   locked: boolean;
   now: string;
 }
