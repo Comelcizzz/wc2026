@@ -7,11 +7,14 @@ import type { MatchComment } from '@/lib/types';
 export default function MatchComments({
   matchId,
   identified,
+  initialCount = 0,
 }: {
   matchId: string;
   identified: boolean;
+  initialCount?: number;
 }) {
   const [comments, setComments] = useState<MatchComment[]>([]);
+  const [count, setCount] = useState(initialCount);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [open, setOpen] = useState(false);
@@ -23,9 +26,15 @@ export default function MatchComments({
     try {
       const r = await fetch(`/api/comments?matchId=${encodeURIComponent(matchId)}`, { cache: 'no-store' });
       const d = await r.json();
-      if (d.ok) setComments(d.comments || []);
+      if (d.ok) {
+        const next = d.comments || [];
+        setComments(next);
+        setCount(next.length);
+      }
     } catch {}
   }
+
+  useEffect(() => setCount(initialCount), [initialCount]);
 
   useEffect(() => {
     if (open) load();
@@ -48,6 +57,7 @@ export default function MatchComments({
     setSending(false);
     if (r.ok) {
       setText('');
+      setCount((c) => c + 1);
       load();
     }
   }
@@ -82,13 +92,16 @@ export default function MatchComments({
       body: JSON.stringify({ matchId, commentId }),
     }).then((x) => x.json());
     setSending(false);
-    if (r.ok) load();
+    if (r.ok) {
+      setCount((c) => Math.max(0, c - 1));
+      load();
+    }
   }
 
   return (
     <div className="match-comments">
       <button type="button" className="match-comments-toggle" onClick={() => setOpen((o) => !o)}>
-        💬 Comments {comments.length > 0 && `(${comments.length})`}
+        💬 Comments {count > 0 && `(${count})`}
       </button>
       {open && (
         <div className="match-comments-body">
