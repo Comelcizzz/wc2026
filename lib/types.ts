@@ -63,6 +63,29 @@ export interface KoFixture {
 export interface KoBracket {
   r32: KoFixture[];
   locked: boolean; // R32 fixtures locked → redraft is open
+  // Optional manual team assignments for later rounds (admin overrides cascade).
+  r16?: KoFixture[];
+  qf?: KoFixture[];
+  sf?: KoFixture[];
+  '3rd'?: KoFixture[];
+  final?: KoFixture[];
+}
+
+export interface ChatMessage {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface MatchComment {
+  id: string;
+  matchId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface Settings {
@@ -82,6 +105,8 @@ export interface PoolData {
   participants: Participant[];
   matches: Match[];
   koBracket: KoBracket;
+  chat?: ChatMessage[];
+  matchComments?: Record<string, MatchComment[]>;
 }
 
 export interface ScoredParticipant extends Participant {
