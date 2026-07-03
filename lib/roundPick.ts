@@ -45,3 +45,14 @@ export function nextKoRound(round: Round): Round | null {
   const i = KO_ROUNDS.indexOf(round);
   return i >= 0 && i < KO_ROUNDS.length - 1 ? KO_ROUNDS[i + 1] : null;
 }
+
+/** How many matchups in a round have both teams assigned (manual admin fixtures). */
+export function countRoundFixturesSet(round: Round, bracket: KoBracket): { set: number; total: number } {
+  const total = KO_MATCH_IDS.filter((m) => m.round === round).length;
+  const stored =
+    round === 'r32'
+      ? bracket.r32
+      : (bracket[round as keyof KoBracket] as { id: string; home: string; away: string }[] | undefined) || [];
+  const set = stored.filter((f) => f.home && f.away).length;
+  return { set, total };
+}

@@ -7,7 +7,7 @@ import { TEAMS, KO_MATCH_IDS, KO_META, BRACKET_COLUMNS, GROUPS } from '@/lib/tou
 import { groupTable } from '@/lib/groupStandings';
 import TeamFlag from '@/components/TeamFlag';
 import type { Round, MatchResult, Match } from '@/lib/types';
-import { getActiveKoPickRound } from '@/lib/roundPick';
+import { getActiveKoPickRound, countRoundFixturesSet } from '@/lib/roundPick';
 
 type Toast = { msg: string; kind: 'ok' | 'err' } | null;
 
@@ -210,13 +210,13 @@ function TeamSelect({
 }
 
 type ConsoleTab = Round | 'grid';
-const CONSOLE_TABS: { key: ConsoleTab; label: string }[] = [
+const CONSOLE_TABS: { key: ConsoleTab; label: string; hint?: string }[] = [
   { key: 'r32', label: 'Round of 32' },
-  { key: 'r16', label: 'Round of 16' },
-  { key: 'qf', label: 'Quarter-Finals' },
-  { key: 'sf', label: 'Semi-Finals' },
-  { key: '3rd', label: '3rd Place' },
-  { key: 'final', label: 'Final' },
+  { key: 'r16', label: 'Round of 16', hint: 'можна до завершення R32' },
+  { key: 'qf', label: '1/4 фіналу (8)', hint: 'можна до завершення R16' },
+  { key: 'sf', label: 'Semi-Finals', hint: 'можна заздалегідь' },
+  { key: '3rd', label: '3rd Place', hint: 'можна заздалегідь' },
+  { key: 'final', label: 'Final', hint: 'можна заздалегідь' },
   { key: 'grid', label: '🗺️ Bracket grid' },
 ];
 
@@ -337,23 +337,30 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
     <div className="card section">
       <SectionTitle title="Bracket console">
         <p className="muted small">
-          Set the Round of 32, then enter results round by round — later rounds auto-fill from saved
-          winners. Switch to the grid to see the bracket like the FIFA site.
-          {pool.koBracket.locked && <span className="pill" style={{ marginLeft: 8 }}>Locked / open to players</span>}
+          Кожен раунд — окрема вкладка. Команди для R16, 1/4, півфіналу тощо можна виставити
+          <strong> до завершення попереднього раунду</strong> — це не блокує гравців у поточному.
+          Відкривайте раунд для піків окремою кнопкою, коли будете готові.
+          {pool.koBracket.locked && <span className="pill" style={{ marginLeft: 8 }}>R32 locked</span>}
         </p>
       </SectionTitle>
 
       <div className="round-tabs">
         {CONSOLE_TABS.map((t) => {
           const done = countRoundDone(t.key, pool, results);
+          const fx =
+            t.key !== 'grid' ? countRoundFixturesSet(t.key, pool.koBracket) : null;
           return (
             <button
               key={t.key}
               type="button"
               className={`round-tab${tab === t.key ? ' active' : ''}`}
               onClick={() => setTab(t.key)}
+              title={t.hint}
             >
               {t.label}
+              {fx && fx.set > 0 && (
+                <span className="round-tab-badge fixtures">{fx.set}/{fx.total}</span>
+              )}
               {done && <span className="round-tab-badge">{done}</span>}
             </button>
           );
@@ -441,7 +448,12 @@ function RoundPickControl({
       )}
       {isActive && (
         <span className="muted small">
-          Гравці бачать лише цей раунд. Наступні раунди можна готувати — це їх не блокує.
+          Гравці пікають лише цей раунд. Інші вкладки можна заповнювати заздалегідь — це їх не блокує.
+        </span>
+      )}
+      {!isActive && round !== 'r32' && (
+        <span className="muted small">
+          Команди тут можна зберегти до завершення попереднього раунду. Гравці не побачать, поки не натиснете Open.
         </span>
       )}
     </div>
@@ -518,8 +530,8 @@ function FixtureEditor({
         </button>
         <span className="muted small" style={{ alignSelf: 'center' }}>
           {isR32
-            ? 'Players can pick each match as soon as its two teams are set.'
-            : 'Override auto-filled teams or set them before results cascade in.'}
+            ? 'Збережіть пари — гравці пікають, коли відкриєте R32.'
+            : 'Виставте пари вручну або дочекайтесь автозаповнення з результатів. Можна зберігати поступово, ще до завершення попереднього раунду.'}
         </span>
       </div>
     </>
