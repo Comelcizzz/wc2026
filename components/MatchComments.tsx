@@ -44,13 +44,13 @@ export default function MatchComments({
   return (
     <div className="match-comments">
       <button type="button" className="match-comments-toggle" onClick={() => setOpen((o) => !o)}>
-        💬 Коментарі {comments.length > 0 && `(${comments.length})`}
+        💬 Comments {comments.length > 0 && `(${comments.length})`}
       </button>
       {open && (
         <div className="match-comments-body">
           <div className="match-comments-list">
             {comments.length === 0 ? (
-              <p className="muted small">Поки немає коментарів.</p>
+              <p className="muted small">No comments yet.</p>
             ) : (
               comments.map((c) => (
                 <div className="match-comment" key={c.id}>
@@ -68,11 +68,11 @@ export default function MatchComments({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && send()}
-                placeholder="Написати коментар…"
+                placeholder="Write a comment..."
                 maxLength={400}
               />
               <button className="btn btn-secondary btn-sm" onClick={send} disabled={sending || !text.trim()}>
-                {sending ? '…' : 'Надіслати'}
+                {sending ? '...' : 'Send'}
               </button>
             </div>
           )}

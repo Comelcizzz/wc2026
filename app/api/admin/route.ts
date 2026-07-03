@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readPool, writePool } from '@/lib/poolStore';
 import { isAdminRequest, generatePassword, hashPassword } from '@/lib/auth';
 import { KO_MATCH_IDS, TEAMS } from '@/lib/tournament';
+import { resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import type { KoFixture, MatchResult, Participant } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +13,17 @@ export async function GET() {
 
 const KO_BY_ID = new Map(KO_MATCH_IDS.map((m) => [m.id, m]));
 const TEAM_SET = new Set(TEAMS);
+
+function fixtureChangeError(existing: KoFixture | undefined, next: KoFixture): string | null {
+  if (!existing) return null;
+  if (existing.home && next.home && existing.home !== next.home) {
+    return `${next.id} home team is already official and cannot be changed.`;
+  }
+  if (existing.away && next.away && existing.away !== next.away) {
+    return `${next.id} away team is already official and cannot be changed.`;
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   if (!isAdminRequest()) {
@@ -94,9 +106,15 @@ export async function POST(req: NextRequest) {
           if (away && !TEAM_SET.has(away)) {
             return NextResponse.json({ ok: false, error: `Unknown team: ${away}` }, { status: 400 });
           }
-          fixtures.push({ id, home, away });
+          const next = { id, home, away };
+          const err = fixtureChangeError(pool.koBracket.r32.find((x) => x.id === id), next);
+          if (err) return NextResponse.json({ ok: false, error: err }, { status: 400 });
+          fixtures.push(next);
         }
-        pool.koBracket.r32 = fixtures;
+        pool.koBracket.r32 = fixtures.map((f) => {
+          const existing = pool.koBracket.r32.find((x) => x.id === f.id);
+          return { id: f.id, home: existing?.home || f.home, away: existing?.away || f.away };
+        });
         break;
       }
 
@@ -119,30 +137,21 @@ export async function POST(req: NextRequest) {
           if (away && !TEAM_SET.has(away)) {
             return NextResponse.json({ ok: false, error: `Unknown team: ${away}` }, { status: 400 });
           }
-          fixtures.push({ id, home, away });
+          const existingRoundFixtures =
+            ((pool.koBracket as any)[round] as KoFixture[] | undefined) || [];
+          const next = { id, home, away };
+          const err = fixtureChangeError(existingRoundFixtures.find((x) => x.id === id), next);
+          if (err) return NextResponse.json({ ok: false, error: err }, { status: 400 });
+          fixtures.push(next);
         }
-        (pool.koBracket as any)[round] = fixtures;
+        const existingRoundFixtures =
+          ((pool.koBracket as any)[round] as KoFixture[] | undefined) || [];
+        (pool.koBracket as any)[round] = fixtures.map((f) => {
+          const existing = existingRoundFixtures.find((x) => x.id === f.id);
+          return { id: f.id, home: existing?.home || f.home, away: existing?.away || f.away };
+        });
         break;
       }
-
-      case 'lockR32': {
-        if (pool.koBracket.r32.length !== 16) {
-          return NextResponse.json(
-            { ok: false, error: 'Enter all 16 Round of 32 fixtures before locking.' },
-            { status: 400 },
-          );
-        }
-        const incomplete = pool.koBracket.r32.some((f) => !f.home || !f.away);
-        if (incomplete) {
-          return NextResponse.json({ ok: false, error: 'Some fixtures are missing a team.' }, { status: 400 });
-        }
-        pool.koBracket.locked = true;
-        break;
-      }
-
-      case 'unlockR32':
-        pool.koBracket.locked = false;
-        break;
 
       case 'setResult': {
         const id = String(body.matchId || '');
@@ -159,6 +168,14 @@ export async function POST(req: NextRequest) {
         const winner = String(body.winner || '');
         if (!home || !away || !winner) {
           return NextResponse.json({ ok: false, error: 'Home, away and winner are required.' }, { status: 400 });
+        }
+        const existingResults = resultsFromMatches(pool.matches);
+        const officialTeams = resolveRealKoTeams(id, existingResults, pool.koBracket);
+        if (!officialTeams?.home || !officialTeams?.away) {
+          return NextResponse.json({ ok: false, error: 'Set the official teams for this match first.' }, { status: 400 });
+        }
+        if (home !== officialTeams.home || away !== officialTeams.away) {
+          return NextResponse.json({ ok: false, error: 'Result teams must match the official fixture.' }, { status: 400 });
         }
         const result: MatchResult = { homeGoals: hg, awayGoals: ag, home, away, winner };
         const m = pool.matches.find((x) => x.id === id);
@@ -221,16 +238,6 @@ export async function POST(req: NextRequest) {
       case 'setStatus':
         pool.settings.status = body.status === 'locked' ? 'locked' : 'open';
         break;
-
-      case 'setKoPickRound': {
-        const round = String(body.round || '');
-        const valid = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
-        if (!valid.includes(round)) {
-          return NextResponse.json({ ok: false, error: 'Invalid round.' }, { status: 400 });
-        }
-        pool.settings.koPickRound = round as typeof pool.settings.koPickRound;
-        break;
-      }
 
       case 'setPaid': {
         const p = pool.participants.find((x) => x.id === String(body.participantId));

@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import Countdown from '@/components/Countdown';
 import { getPool, postJSON, type PoolResponse } from '@/lib/clientApi';
 import { resolveRealKoTeams } from '@/lib/bracket';
 import { TEAMS, KO_MATCH_IDS, KO_META, BRACKET_COLUMNS, GROUPS } from '@/lib/tournament';
@@ -121,7 +120,6 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
-        <Countdown deadline={pool.settings.picksDeadline} />
       </section>
 
       <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 16 }}>
@@ -150,32 +148,35 @@ function SectionTitle({ title, children }: { title: string; children?: React.Rea
 }
 
 function DeadlineSection({ pool, act }: { pool: PoolResponse; act: (b: any, m?: string) => void }) {
-  const [dt, setDt] = useState('');
+  function emergencyStop() {
+    const first = window.confirm(
+      'Emergency Stop will immediately lock every pick for every player. Continue?',
+    );
+    if (!first) return;
+    const second = window.confirm(
+      'Final warning: this closes ALL picks right now. You can reopen later, but players will be blocked until then.',
+    );
+    if (!second) return;
+    act({ action: 'setStatus', status: 'locked' }, 'Emergency stop enabled');
+  }
+
   return (
     <div className="card section">
-      <SectionTitle title="Deadline & status">
-        <p className="muted small">Current: {new Date(pool.settings.picksDeadline).toLocaleString()}</p>
+      <SectionTitle title="Emergency controls">
+        <p className="muted small">
+          Normal locking is per match: each score pick closes 1 hour before kickoff (Toronto time).
+          Use Emergency Stop only if you need to freeze everything immediately.
+        </p>
       </SectionTitle>
-      <div className="row">
-        <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)} style={{ maxWidth: 240 }} />
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => dt && act({ action: 'extendDeadline', deadline: new Date(dt).toISOString() }, 'Deadline updated')}
-        >
-          Set deadline
-        </button>
-        <button className="btn btn-ghost btn-sm" onClick={() => act({ action: 'extendDeadline', addHours: 1 }, '+1h')}>+1 hour</button>
-        <button className="btn btn-ghost btn-sm" onClick={() => act({ action: 'extendDeadline', addHours: 24 }, '+1 day')}>+1 day</button>
-      </div>
       <div className="row" style={{ marginTop: 12 }}>
         <span className="pill">Status: {pool.settings.status}</span>
         {pool.settings.status === 'open' ? (
-          <button className="btn btn-danger btn-sm" onClick={() => act({ action: 'setStatus', status: 'locked' }, 'Locked')}>
-            Force lock now
+          <button className="btn btn-danger btn-sm" onClick={emergencyStop}>
+            Emergency Stop: lock all picks
           </button>
         ) : (
           <button className="btn btn-secondary btn-sm" onClick={() => act({ action: 'setStatus', status: 'open' }, 'Re-opened')}>
-            Re-open
+            Re-open picks
           </button>
         )}
       </div>
@@ -216,11 +217,11 @@ function TeamSelect({
 type ConsoleTab = Round | 'grid';
 const CONSOLE_TABS: { key: ConsoleTab; label: string; hint?: string }[] = [
   { key: 'r32', label: 'Round of 32' },
-  { key: 'r16', label: 'Round of 16', hint: 'можна до завершення R32' },
-  { key: 'qf', label: '1/4 фіналу (8)', hint: 'можна до завершення R16' },
-  { key: 'sf', label: 'Semi-Finals', hint: 'можна заздалегідь' },
-  { key: '3rd', label: '3rd Place', hint: 'можна заздалегідь' },
-  { key: 'final', label: 'Final', hint: 'можна заздалегідь' },
+  { key: 'r16', label: 'Round of 16', hint: 'Can be prepared before R32 finishes' },
+  { key: 'qf', label: 'Quarter-Finals', hint: 'Can be prepared before R16 finishes' },
+  { key: 'sf', label: 'Semi-Finals', hint: 'Can be prepared in advance' },
+  { key: '3rd', label: '3rd Place', hint: 'Can be prepared in advance' },
+  { key: 'final', label: 'Final', hint: 'Can be prepared in advance' },
   { key: 'grid', label: '🗺️ Bracket grid' },
 ];
 
@@ -341,10 +342,9 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
     <div className="card section">
       <SectionTitle title="Bracket console">
         <p className="muted small">
-          Кожен раунд — окрема вкладка. Команди для R16, 1/4, півфіналу тощо можна виставити
-          <strong> до завершення попереднього раунду</strong> — це не блокує гравців у поточному.
-          Відкривайте раунд для піків окремою кнопкою, коли будете готові.
-          {pool.koBracket.locked && <span className="pill" style={{ marginLeft: 8 }}>R32 locked</span>}
+          Each round has its own tab. Set official matchups first, then enter scores.
+          The next round opens to players only when every prior round has matchups and this round has
+          at least one full official match.
         </p>
       </SectionTitle>
 
@@ -365,7 +365,7 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
             >
               {t.label}
               {partial > 0 && partial !== fx?.set && (
-                <span className="round-tab-badge partial">{partial} started</span>
+                <span className="round-tab-badge partial">{partial} official</span>
               )}
               {fx && fx.set > 0 && (
                 <span className="round-tab-badge fixtures">{fx.set}/{fx.total}</span>
@@ -383,26 +383,6 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
           <RoundPickControl pool={pool} round="r32" results={results} />
           <div className="console-subhead">1 · Set the matchups</div>
           <FixtureEditor pool={pool} act={act} round="r32" />
-          <div className="row" style={{ marginTop: 8, marginBottom: 16 }}>
-            {!pool.koBracket.locked ? (
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => act({ action: 'lockR32' }, 'R32 locked — players can re-pick')}
-              >
-                Lock R32 & open picks
-              </button>
-            ) : (
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => act({ action: 'unlockR32' }, 'R32 unlocked')}
-              >
-                Unlock R32 fixtures
-              </button>
-            )}
-            <span className="muted small">
-              {pool.koBracket.locked ? 'Bracket locked — players see real R32 teams.' : 'Save fixtures, then lock to confirm.'}
-            </span>
-          </div>
           <div className="console-subhead spaced">2 · Enter the scores</div>
           <ResultsEditor pool={pool} act={act} round="r32" results={results} />
         </>
@@ -446,13 +426,13 @@ function RoundPickControl({
   return (
     <div className="row" style={{ marginBottom: 14, gap: 10 }}>
       {isOpen ? (
-        <span className="pill">Відкрито для гравців · {partial} матч(ів) з командою</span>
+        <span className="pill">Open to players · {partial} official match(es)</span>
       ) : (
-        <span className="pill">Закрито — виставте хоча б одну команду в будь-якому матчі</span>
+        <span className="pill">Closed — set at least one full official match</span>
       )}
       <span className="muted small">
-        Гравці бачать раунди до <strong>{max.toUpperCase()}</strong>. Можуть повертатись до попередніх,
-        якщо матчі ще не закриті.
+        Players can access rounds through <strong>{max.toUpperCase()}</strong>. Earlier rounds remain editable
+        match-by-match until each match reaches its 1-hour lock.
       </span>
     </div>
   );
@@ -512,9 +492,19 @@ function FixtureEditor({
                 <span className="fx-m">M{meta?.m ?? row.id}</span>
                 <span className="fx-date">{meta?.date}</span>
               </div>
-              <TeamSelect value={row.home} onChange={(v) => upd(i, 'home', v)} placeholder="-- home team --" />
+              <TeamSelect
+                value={row.home}
+                onChange={(v) => upd(i, 'home', v)}
+                placeholder="-- home team --"
+                disabled={!!initial[i]?.home}
+              />
               <div className="fx-vs"><span>VS</span></div>
-              <TeamSelect value={row.away} onChange={(v) => upd(i, 'away', v)} placeholder="-- away team --" />
+              <TeamSelect
+                value={row.away}
+                onChange={(v) => upd(i, 'away', v)}
+                placeholder="-- away team --"
+                disabled={!!initial[i]?.away}
+              />
             </div>
           );
         })}
@@ -528,8 +518,8 @@ function FixtureEditor({
         </button>
         <span className="muted small" style={{ alignSelf: 'center' }}>
           {isR32
-            ? 'Збережіть пари — гравці пікають, коли відкриєте R32.'
-            : 'Виставте пари вручну або дочекайтесь автозаповнення з результатів. Можна зберігати поступово, ще до завершення попереднього раунду.'}
+            ? 'Save official matchups. Team slots cannot be changed once saved.'
+            : 'Set official matchups manually or let them autofill from results. Team slots cannot be changed once saved.'}
         </span>
       </div>
     </>
@@ -661,23 +651,16 @@ function ResultRow({
         {res?.winner && <span className="result-done">✓ <TeamFlag team={res.winner} size={13} /> {res.winner}</span>}
       </div>
 
-      {isR32 ? (
-        <div className="result-fixture">
-          {fixture?.home && fixture?.away ? (
-            <span className="result-fixture-teams">
-              <TeamFlag team={fixture.home} size={16} /> {fixture.home} <span className="muted">v</span>{' '}
-              <TeamFlag team={fixture.away} size={16} /> {fixture.away}
-            </span>
-          ) : (
-            <span className="tbd">Set this fixture in the Round of 32 tab first</span>
-          )}
-        </div>
-      ) : (
-        <div className="result-pickers">
-          <TeamSelect value={home} onChange={setHome} placeholder="-- home team --" />
-          <TeamSelect value={away} onChange={setAway} placeholder="-- away team --" />
-        </div>
-      )}
+      <div className="result-fixture">
+        {displayHome && displayAway ? (
+          <span className="result-fixture-teams">
+            <TeamFlag team={displayHome} size={16} /> {displayHome} <span className="muted">v</span>{' '}
+            <TeamFlag team={displayAway} size={16} /> {displayAway}
+          </span>
+        ) : (
+          <span className="tbd">Set the official fixture in this round tab first</span>
+        )}
+      </div>
 
       <div className="result-score-row">
         <span className="result-side">

@@ -96,8 +96,6 @@ export interface Settings {
   prizeThird: number;
   status: 'open' | 'locked';
   picksDeadline: string; // ISO 8601 with tz offset
-  /** Which knockout round players may pick right now (one round at a time). */
-  koPickRound?: Round;
   champion?: string; // actual champion (admin) for +10 bonus / display
   totalGoals?: number | null; // actual total goals (tiebreak)
 }

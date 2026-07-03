@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Countdown from '@/components/Countdown';
 import ClosingSoonBanner from '@/components/ClosingSoonBanner';
 import MatchPickCountdown from '@/components/MatchPickCountdown';
 import MatchComments from '@/components/MatchComments';
@@ -11,7 +10,7 @@ import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { canPickMatch, getMaxOpenPickRound, isRoundAccessible } from '@/lib/roundPick';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { gradeGroupMatch, gradeKoMatch } from '@/lib/scoring';
-import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS, TEAMS } from '@/lib/tournament';
+import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS } from '@/lib/tournament';
 import TeamFlag from '@/components/TeamFlag';
 import { groupTable } from '@/lib/groupStandings';
 import { coolPhrase, displayName } from '@/lib/flair';
@@ -173,7 +172,7 @@ export default function PicksPage() {
     if (!pool || adminLocked) return;
     if (!canPickMatch(id, pool.koBracket, koResultsMap)) {
       if (isMatchPickLocked(id)) {
-        flashLock('Цей матч закрито — менше години до початку (час Торонто).');
+        flashLock('This match is locked — less than 1 hour to kickoff (Toronto time).');
       }
       return;
     }
@@ -193,7 +192,7 @@ export default function PicksPage() {
   function setEt(id: string, team: string) {
     if (!pool || adminLocked) return;
     if (!canPickMatch(id, pool.koBracket, koResultsMap)) {
-      if (isMatchPickLocked(id)) flashLock('Цей матч закрито — менше години до початку (час Торонто).');
+      if (isMatchPickLocked(id)) flashLock('This match is locked — less than 1 hour to kickoff (Toronto time).');
       return;
     }
     setKoPicks((prev) => ({ ...prev, [id]: { ...(prev[id] as any), et: team } }));
@@ -225,7 +224,7 @@ export default function PicksPage() {
     if (Object.keys(clean).length === 0) {
       return flash('Fill in at least one open match first.', 'err');
     }
-    await persist(clean, 'Збережено. Можна змінювати скільки завгодно — до закриття матчу.');
+    await persist(clean, 'Saved. You can edit any unlocked match until its 1-hour cutoff.');
   }
 
   async function clearAll() {
@@ -236,25 +235,6 @@ export default function PicksPage() {
       return;
     }
     await persist({}, 'Knockout picks cleared.');
-  }
-
-  // Saves the explicit champion pick on its own, preserving the current
-  // knockout picks (the server replaces the full set, so we resend them).
-  async function saveChampion(team: string) {
-    setChampion(team);
-    setSaving(true);
-    const res = await postJSON('/api/picks', {
-      name: name.trim(),
-      koPicks: cleanKoPicks(koPicks),
-      champion: team || undefined,
-    });
-    setSaving(false);
-    if (res.ok) {
-      flash(team ? `Champion saved · ${team}` : 'Champion cleared.', 'ok');
-      getPool().then((p) => p.ok && setPool(p));
-    } else {
-      flash(res.error || 'Save failed.', 'err');
-    }
   }
 
   if (!pool) return <div className="card muted">Loading...</div>;
@@ -272,6 +252,14 @@ export default function PicksPage() {
   // Tiebreaker is derived live from the shared helper (the same one the server
   // uses): group-stage goals in the player's picks + their knockout-pick goals.
   const autoTotalGoals = computeTotalGoals(myGroupPicks, koPicks);
+  const availableMatches = KO_MATCH_IDS.filter((m) => {
+    if (!isRoundAccessible(m.round, pool.koBracket, koResultsMap)) return false;
+    const teams = resolved[m.id];
+    return !!(teams?.home && teams?.away);
+  });
+  const pickableMatchIds = KO_MATCH_IDS.filter((m) => canPickMatch(m.id, pool.koBracket, koResultsMap)).map((m) => m.id);
+  const availablePicked = availableMatches.filter((m) => hasCompleteKoPick(koPicks[m.id])).length;
+  const openMissing = availableMatches.filter((m) => canPickMatch(m.id, pool.koBracket, koResultsMap) && !hasCompleteKoPick(koPicks[m.id]));
 
   // Real knockout results the admin has entered, keyed by match id. Drives the
   // per-match results strip and the points summary.
@@ -325,12 +313,12 @@ export default function PicksPage() {
         <div className="picks-title-block">
           <div className="eyebrow">My bracket</div>
           <h1>Knockout picks</h1>
-          <p>{coolPhrase(name || 'wc')} Fill the bracket — winners flow forward through your own picks.</p>
+          <p>{coolPhrase(name || 'wc')} Pick scores for official matchups before each match locks.</p>
         </div>
         <div className="picks-metrics">
           <div className="metric mini">
-            <div className="label">Progress</div>
-            <div className="value">{filled}/{KO_MATCH_IDS.length}</div>
+            <div className="label">Available</div>
+            <div className="value">{availablePicked}/{availableMatches.length}</div>
           </div>
           <div className="metric mini">
             <div className="label">Player</div>
@@ -338,14 +326,18 @@ export default function PicksPage() {
           </div>
           <div className="metric mini">
             <div className="label">Status</div>
-            <div className="value">{pool.locked ? 'Locked' : bracketOpen ? 'Open' : 'Setup'}</div>
+            <div className="value">{adminLocked ? 'Stopped' : bracketOpen ? 'Open' : 'Setup'}</div>
           </div>
         </div>
-        <Countdown deadline={pool.settings.picksDeadline} />
       </section>
 
       {identified && bracketOpen && (
-        <ClosingSoonBanner nowIso={pool.now} maxRound={maxOpenRound} />
+        <ClosingSoonBanner
+          nowIso={pool.now}
+          maxRound={maxOpenRound}
+          matchIds={pickableMatchIds}
+          koPicks={koPicks}
+        />
       )}
 
       {!identified ? (
@@ -369,6 +361,12 @@ export default function PicksPage() {
       ) : (
         <>
           <SessionCard name={name} filled={filled} logout={logout} />
+          <PickAvailabilitySummary
+            available={availableMatches.length}
+            picked={availablePicked}
+            missing={openMissing}
+            resolved={resolved}
+          />
 
           <div className="page-tabs scrollable">
             {PAGE_TABS.map((tab) => {
@@ -382,7 +380,7 @@ export default function PicksPage() {
                 onClick={() => switchTab(tab)}
               >
                 {TAB_LABELS[tab]}
-                {tab === maxOpenRound && koTab && <span className="page-tab-live">новий</span>}
+                {tab === maxOpenRound && koTab && <span className="page-tab-live">open</span>}
               </button>
             );})}
           </div>
@@ -410,27 +408,26 @@ export default function PicksPage() {
             <>
               {adminLocked && (
                 <div className="card">
-                  <strong>Піки заблоковано адміном.</strong>
+                  <strong>Emergency Stop is active. All picks are locked by the admin.</strong>
                 </div>
               )}
 
               {isKoRoundTab(pageTab) && !isRoundAccessible(pageTab, pool.koBracket, koResultsMap) && !adminLocked && (
                 <div className="card muted">
-                  <strong>{TAB_LABELS[pageTab]} — ще не відкрито</strong>
+                  <strong>{TAB_LABELS[pageTab]} is not open yet</strong>
                   <p className="muted small" style={{ marginTop: 6 }}>
-                    Раунд з&apos;явиться, коли адмін виставить <strong>хоча б одну команду</strong> у будь-якому
-                    матчі цього раунду. Зараз доступно до <strong>{ROUND_LABELS[maxOpenRound]}</strong>.
+                    This round opens when every prior round has official matchups and the admin sets at
+                    least one full official match here. You can currently pick through <strong>{ROUND_LABELS[maxOpenRound]}</strong>.
                   </p>
                 </div>
               )}
 
               {isKoRoundTab(pageTab) && isRoundAccessible(pageTab, pool.koBracket, koResultsMap) && !adminLocked && (
                 <div className="card repick-banner">
-                  <strong>Доступно: {ROUND_LABELS.r32} → {ROUND_LABELS[maxOpenRound]}</strong>
+                  <strong>Available: {ROUND_LABELS.r32} → {ROUND_LABELS[maxOpenRound]}</strong>
                   <p className="muted small" style={{ marginTop: 6 }}>
-                    Можна повертатись до попередніх раундів, якщо матчі ще відкриті (більше години до початку).
-                    Наступний раунд відкриється, коли адмін виставить хоча б одну команду там.
-                    Кожен матч закривається окремо за 1 год до kickoff (час Торонто).
+                    You can go back to earlier rounds while individual matches are still open. Each match locks
+                    exactly 1 hour before kickoff (Toronto time).
                   </p>
                 </div>
               )}
@@ -466,24 +463,12 @@ export default function PicksPage() {
                 <div>
                   <div className="lbl" style={{ marginBottom: 2 }}>Champion · +10 bonus</div>
                   <p className="muted small" style={{ margin: 0 }}>
-                    Pick who lifts the trophy. Independent of your final — choose any team.
+                    Champion picks are closed and cannot be changed.
                   </p>
                 </div>
                 <div className="champion-pick">
                   {champion && <TeamFlag team={champion} size={20} />}
-                  <select
-                    className="team-select-flag champion-select"
-                    value={champion}
-                    onChange={(e) => saveChampion(e.target.value)}
-                    disabled={saving || adminLocked}
-                  >
-                    <option value="">— Select champion —</option>
-                    {[...TEAMS].sort((a, b) => a.localeCompare(b)).map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="pill">{champion || 'No champion pick saved'}</span>
                 </div>
               </div>
 
@@ -598,6 +583,47 @@ function SessionCard({
   );
 }
 
+function PickAvailabilitySummary({
+  available,
+  picked,
+  missing,
+  resolved,
+}: {
+  available: number;
+  picked: number;
+  missing: { id: string; round: Round; label: string }[];
+  resolved: Record<string, { home: string | null; away: string | null } | null>;
+}) {
+  return (
+    <div className="card section pick-availability">
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <strong>Available official picks</strong>
+          <p className="muted small" style={{ marginTop: 4 }}>
+            {picked}/{available} picks saved for official matchups currently available to you.
+          </p>
+        </div>
+        <span className={`pill${missing.length === 0 ? ' success' : ''}`}>
+          {missing.length === 0 ? 'All caught up' : `${missing.length} missing`}
+        </span>
+      </div>
+      {missing.length > 0 && (
+        <div className="missing-picks">
+          {missing.slice(0, 6).map((m) => {
+            const teams = resolved[m.id];
+            return (
+              <span className="missing-pick-chip" key={m.id}>
+                {ROUND_LABELS[m.round]} · {teams?.home || 'TBD'} v {teams?.away || 'TBD'}
+              </span>
+            );
+          })}
+          {missing.length > 6 && <span className="muted small">+{missing.length - 6} more</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Keeps only fully-filled matches (both score boxes are integers). Emptied or
 // half-typed picks are dropped so the save removes them server-side.
 function cleanKoPicks(picks: KoPicks): KoPicks {
@@ -608,6 +634,10 @@ function cleanKoPicks(picks: KoPicks): KoPicks {
     }
   }
   return out;
+}
+
+function hasCompleteKoPick(pick: KoPicks[string] | undefined): boolean {
+  return !!pick && Number.isInteger(pick.h) && Number.isInteger(pick.a) && (pick.h !== pick.a || !!pick.et);
 }
 
 // Maps a shared grade status to the existing result CSS suffix + label.
@@ -845,7 +875,7 @@ function RoundView({
         </div>
         {ready === 0 ? (
           <div className="card muted" style={{ padding: 24 }}>
-            No matches are ready yet. Pick the previous round&apos;s winners and they&apos;ll flow in here.
+            No official matchups are ready in this round yet.
           </div>
         ) : (
           <div className="matches-grid">
@@ -930,9 +960,9 @@ function ListMatchCard({
           {away ? <>{away}<TeamFlag team={away} size={16} className="right" /></> : <>TBD<TeamFlag team={null} size={16} className="right" /></>}
         </span>
       </div>
-      {!ready && <div className="ko-not-ready">Complete feeder matches first</div>}
+      {!ready && <div className="ko-not-ready">Waiting for official teams</div>}
       {ready && matchLocked && (
-        <div className="ko-not-ready urgent">Цей матч закрито — менше години до початку (час Торонто)</div>
+        <div className="ko-not-ready urgent">This match is locked — less than 1 hour to kickoff (Toronto time)</div>
       )}
       {ready && isDraw && (
         <div className="et-row">
@@ -996,7 +1026,7 @@ function BracketBoard({
       <div className="bracket-head">
         <div>
           <h2 className="section-title">Knockout stage</h2>
-          <p className="muted small">Official M73-M104 flow. Later rounds unlock from winners you enter.</p>
+          <p className="muted small">Official M73-M104 flow. Matchups appear after the admin confirms them.</p>
         </div>
         <span className="pill">R32 to Final</span>
       </div>
@@ -1087,7 +1117,7 @@ function BracketMatch({
           />
         </div>
       </div>
-      {!ready && <div className="ko-not-ready">Complete feeders</div>}
+      {!ready && <div className="ko-not-ready">Waiting for official teams</div>}
       {ready && isDraw && (
         <div className="et-row compact">
           <span className="muted">Advances</span>

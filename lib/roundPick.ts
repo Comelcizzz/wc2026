@@ -19,29 +19,41 @@ export function adminTeamsForMatch(
   return resolveRealKoTeams(matchId, results, bracket);
 }
 
-/** Admin set at least one team (home or away) on any match in this round. */
-export function roundHasAnyTeamSet(
+/** Admin has approved at least one full matchup in this round. */
+export function roundHasOfficialMatch(
   round: Round,
   bracket: KoBracket,
   results: Record<string, Match['result']>,
 ): boolean {
   return KO_MATCH_IDS.filter((m) => m.round === round).some((m) => {
     const t = adminTeamsForMatch(m.id, bracket, results);
-    return !!(t?.home || t?.away);
+    return !!(t?.home && t?.away);
+  });
+}
+
+function roundComplete(round: Round, bracket: KoBracket, results: Record<string, Match['result']>): boolean {
+  const matches = KO_MATCH_IDS.filter((m) => m.round === round);
+  return matches.every((m) => {
+    const t = adminTeamsForMatch(m.id, bracket, results);
+    return !!(t?.home && t?.away);
   });
 }
 
 /**
- * Furthest round players may access. Each round unlocks when admin sets ≥1 team
- * on any match in that round. Players cannot go beyond this round.
+ * Furthest round players may access. A next round opens only when every prior
+ * round has official matchups and the target round has at least one full match.
  */
 export function getMaxOpenPickRound(
   bracket: KoBracket,
   results: Record<string, Match['result']>,
 ): Round {
   let max: Round = 'r32';
-  for (const r of KO_ROUNDS) {
-    if (roundHasAnyTeamSet(r, bracket, results)) max = r;
+  for (let i = 1; i < KO_ROUNDS.length; i++) {
+    const prev = KO_ROUNDS[i - 1];
+    const round = KO_ROUNDS[i];
+    if (!roundComplete(prev, bracket, results)) break;
+    if (!roundHasOfficialMatch(round, bracket, results)) break;
+    max = round;
   }
   return max;
 }
@@ -97,7 +109,7 @@ export function countRoundFixturesSet(round: Round, bracket: KoBracket): { set: 
   return { set, total };
 }
 
-/** Matches in rounds up to maxOpen with at least one admin team (for UI hints). */
+/** Matches with a full official matchup in this round (for UI hints). */
 export function countPartialTeamsInRound(
   round: Round,
   bracket: KoBracket,
@@ -105,6 +117,6 @@ export function countPartialTeamsInRound(
 ): number {
   return KO_MATCH_IDS.filter((m) => m.round === round).filter((m) => {
     const t = adminTeamsForMatch(m.id, bracket, results);
-    return !!(t?.home || t?.away);
+    return !!(t?.home && t?.away);
   }).length;
 }

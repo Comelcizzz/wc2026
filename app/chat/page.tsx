@@ -47,16 +47,16 @@ export default function ChatPage() {
     <div className="chat-page">
       <section className="picks-toolbar">
         <div className="picks-title-block">
-          <div className="eyebrow">Спільнота</div>
-          <h1>Чат пулу</h1>
-          <p>Спілкуйтесь з усіма учасниками. Коментарі під конкретним матчем — на сторінці піків.</p>
+          <div className="eyebrow">Community</div>
+          <h1>Pool chat</h1>
+          <p>Talk with everyone in the pool. Match-specific comments live on the picks page.</p>
         </div>
       </section>
 
       <div className="card chat-shell">
         <div className="chat-messages">
           {messages.length === 0 ? (
-            <p className="muted" style={{ textAlign: 'center', padding: 24 }}>Поки немає повідомлень. Будьте першими!</p>
+            <p className="muted" style={{ textAlign: 'center', padding: 24 }}>No messages yet. Be the first!</p>
           ) : (
             messages.map((m) => (
               <div className="chat-msg" key={m.id}>
@@ -78,16 +78,16 @@ export default function ChatPage() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && send()}
-              placeholder="Написати повідомлення…"
+              placeholder="Write a message..."
               maxLength={500}
             />
             <button className="btn btn-primary" onClick={send} disabled={sending || !text.trim()}>
-              {sending ? '…' : 'Надіслати'}
+              {sending ? '...' : 'Send'}
             </button>
           </div>
         ) : (
           <p className="muted small chat-login-hint">
-            <a href="/picks">Увійдіть</a> на сторінці піків, щоб писати в чат.
+            <a href="/picks">Log in</a> on the picks page to write in chat.
           </p>
         )}
       </div>
