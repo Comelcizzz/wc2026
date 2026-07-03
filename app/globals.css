@@ -2029,3 +2029,143 @@ label.lbl {
     font-size: 14px;
   }
 }
+
+/* ── Per-match pick locks & closing soon ── */
+.closing-soon-banner {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.closing-soon-urgent,
+.closing-soon-next {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.closing-soon-urgent {
+  border-color: rgba(255, 120, 90, .45);
+  background: rgba(255, 90, 70, .08);
+}
+.closing-soon-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.closing-match-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--border);
+  min-width: 140px;
+}
+.closing-match-chip.urgent {
+  border-color: rgba(255, 100, 80, .5);
+  background: rgba(255, 80, 60, .1);
+}
+.cmc-round { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cmc-label { font-weight: 800; font-size: 13px; }
+.cmc-time { font-size: 12px; color: var(--green); font-weight: 700; }
+.closing-match-chip.urgent .cmc-time { color: #ff8a7a; }
+
+.match-lock-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(25, 195, 125, .12);
+  color: var(--green);
+}
+.match-lock-badge.urgent {
+  background: rgba(255, 100, 80, .15);
+  color: #ff9a8a;
+  animation: pulse-urgent 1.2s ease-in-out infinite;
+}
+.match-lock-badge.locked {
+  background: rgba(255, 90, 82, .12);
+  color: #ffb2ad;
+}
+.match-card.match-pick-closed { opacity: .75; }
+.ko-not-ready.urgent { color: #ff9a8a; font-style: normal; font-weight: 700; }
+.repick-banner {
+  border-color: rgba(25, 195, 125, .4);
+  background: rgba(25, 195, 125, .06);
+  margin-bottom: 14px;
+}
+.match-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+@keyframes pulse-urgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+
+/* ── Chat ── */
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  max-height: 70vh;
+  padding: 0;
+  overflow: hidden;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chat-msg {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--border);
+}
+.chat-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.chat-msg-text { margin: 0; line-height: 1.45; }
+.chat-input {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+}
+.chat-input input { flex: 1; }
+.chat-login-hint { padding: 12px 16px; border-top: 1px solid var(--border); margin: 0; }
+
+/* ── Match comments ── */
+.match-comments { margin-top: 10px; }
+.match-comments-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.match-comments-toggle:hover { color: var(--ink); }
+.match-comments-body {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.match-comments-list {
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.match-comment p { margin: 4px 0 0; font-size: 13px; }
+.match-comments-input input { flex: 1; min-width: 0; }

@@ -364,12 +364,37 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
       ) : tab === 'r32' ? (
         <>
           <div className="console-subhead">1 · Set the matchups</div>
-          <FixtureEditor pool={pool} act={act} />
+          <FixtureEditor pool={pool} act={act} round="r32" />
+          <div className="row" style={{ marginTop: 8, marginBottom: 16 }}>
+            {!pool.koBracket.locked ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => act({ action: 'lockR32' }, 'R32 locked — players can re-pick')}
+              >
+                Lock R32 & open picks
+              </button>
+            ) : (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => act({ action: 'unlockR32' }, 'R32 unlocked')}
+              >
+                Unlock R32 fixtures
+              </button>
+            )}
+            <span className="muted small">
+              {pool.koBracket.locked ? 'Bracket locked — players see real R32 teams.' : 'Save fixtures, then lock to confirm.'}
+            </span>
+          </div>
           <div className="console-subhead spaced">2 · Enter the scores</div>
           <ResultsEditor pool={pool} act={act} round="r32" results={results} />
         </>
       ) : (
-        <ResultsEditor pool={pool} act={act} round={tab} results={results} />
+        <>
+          <div className="console-subhead">1 · Set the matchups</div>
+          <FixtureEditor pool={pool} act={act} round={tab} results={results} />
+          <div className="console-subhead spaced">2 · Enter the scores</div>
+          <ResultsEditor pool={pool} act={act} round={tab} results={results} />
+        </>
       )}
     </div>
   );
@@ -387,22 +412,47 @@ function countRoundDone(
   return `${done}/${ids.length}`;
 }
 
-function FixtureEditor({ pool, act }: { pool: PoolResponse; act: (b: any, m?: string) => void }) {
+function FixtureEditor({
+  pool,
+  act,
+  round,
+  results,
+}: {
+  pool: PoolResponse;
+  act: (b: any, m?: string) => void;
+  round: Round;
+  results?: Record<string, MatchResult | undefined>;
+}) {
+  const isR32 = round === 'r32';
+  const matchIds = KO_MATCH_IDS.filter((m) => m.round === round);
+
   const initial = useMemo(() => {
-    const arr: { id: string; home: string; away: string }[] = [];
-    for (let i = 1; i <= 16; i++) {
-      const id = `R32-${i}`;
-      const ex = pool.koBracket.r32.find((f) => f.id === id);
-      arr.push({ id, home: ex?.home || '', away: ex?.away || '' });
-    }
-    return arr;
-  }, [pool]);
+    const stored = isR32
+      ? pool.koBracket.r32
+      : (pool.koBracket[round as keyof typeof pool.koBracket] as { id: string; home: string; away: string }[] | undefined) || [];
+    return matchIds.map((m) => {
+      const ex = stored.find((f) => f.id === m.id);
+      if (ex?.home && ex?.away) return { id: m.id, home: ex.home, away: ex.away };
+      if (!isR32 && results) {
+        const derived = resolveRealKoTeams(m.id, results, pool.koBracket);
+        return { id: m.id, home: derived?.home || '', away: derived?.away || '' };
+      }
+      const fx = pool.koBracket.r32.find((f) => f.id === m.id);
+      if (isR32 && fx) return { id: m.id, home: fx.home || '', away: fx.away || '' };
+      return { id: m.id, home: '', away: '' };
+    });
+  }, [pool, round, isR32, matchIds, results]);
+
   const [rows, setRows] = useState(initial);
   useEffect(() => setRows(initial), [initial]);
 
   function upd(i: number, side: 'home' | 'away', v: string) {
     setRows((r) => r.map((row, idx) => (idx === i ? { ...row, [side]: v } : row)));
   }
+
+  const saveAction = isR32
+    ? { action: 'setR32', fixtures: rows }
+    : { action: 'setRoundFixtures', round, fixtures: rows };
 
   return (
     <>
@@ -424,11 +474,16 @@ function FixtureEditor({ pool, act }: { pool: PoolResponse; act: (b: any, m?: st
         })}
       </div>
       <div className="row" style={{ marginTop: 16 }}>
-        <button className="btn btn-primary btn-sm" onClick={() => act({ action: 'setR32', fixtures: rows }, 'Fixtures saved — open to players')}>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => act(saveAction, isR32 ? 'Fixtures saved — open to players' : `${round} fixtures saved`)}
+        >
           Save fixtures
         </button>
         <span className="muted small" style={{ alignSelf: 'center' }}>
-          Players can pick each match as soon as its two teams are set.
+          {isR32
+            ? 'Players can pick each match as soon as its two teams are set.'
+            : 'Override auto-filled teams or set them before results cascade in.'}
         </span>
       </div>
     </>

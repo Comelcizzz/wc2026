@@ -3,6 +3,7 @@ import { readPool, writePool } from '@/lib/poolStore';
 import { isLocked, getPlayerId } from '@/lib/auth';
 import { predictedWinnerOf } from '@/lib/bracket';
 import { computeTotalGoals } from '@/lib/tiebreaker';
+import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { KO_MATCH_IDS, TEAMS } from '@/lib/tournament';
 import type { KoPicks } from '@/lib/types';
 
@@ -13,8 +14,6 @@ const TEAM_SET = new Set(TEAMS);
 
 export async function POST(req: NextRequest) {
   try {
-    // Must be a logged-in player (signed cookie). Identity comes from the
-    // session, never from the request body — you can only submit as yourself.
     const playerId = getPlayerId();
     if (!playerId) {
       return NextResponse.json({ ok: false, error: 'Please log in first.' }, { status: 401 });
@@ -22,14 +21,13 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const pool = await readPool();
+    const now = Date.now();
 
     const idx = pool.participants.findIndex((p) => p.id === playerId);
     if (idx < 0) {
       return NextResponse.json({ ok: false, error: 'Your account was not found.' }, { status: 404 });
     }
 
-    // Incremental open: accept picks as soon as any real R32 fixture exists,
-    // even before the admin fully locks the bracket.
     const anyOpen = pool.koBracket.r32.some((f) => f.home && f.away);
     if (!anyOpen) {
       return NextResponse.json({ ok: false, error: 'No knockout fixtures are open yet.' }, { status: 403 });
@@ -38,25 +36,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'The deadline has passed. Picks are locked.' }, { status: 403 });
     }
 
-    // Sanitize incoming KO picks.
+    const existing = pool.participants[idx].koPicks || {};
     const raw = (body.koPicks || {}) as Record<string, any>;
     const koPicks: KoPicks = {};
+    const lockedAttempts: string[] = [];
+
+    // Start from existing picks; apply incoming changes only for unlocked matches.
+    for (const [id, v] of Object.entries(existing)) {
+      if (KO_IDS.has(id) && !isMatchPickLocked(id, now)) {
+        // Will be overwritten or dropped below if present in raw
+      } else if (KO_IDS.has(id)) {
+        koPicks[id] = v;
+      }
+    }
+
     for (const [id, v] of Object.entries(raw)) {
-      if (!KO_IDS.has(id) || !v) continue;
+      if (!KO_IDS.has(id)) continue;
+      if (isMatchPickLocked(id, now)) {
+        if (existing[id]) lockedAttempts.push(id);
+        continue;
+      }
+      if (!v) {
+        delete koPicks[id];
+        continue;
+      }
       const h = Number(v.h);
       const a = Number(v.a);
       if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0) continue;
-      const pick: any = { h, a };
+      const pick: KoPicks[string] = { h, a };
       if (h === a && typeof v.et === 'string' && v.et) pick.et = v.et;
       koPicks[id] = pick;
     }
 
-    // Tiebreaker is derived from the player's saved group picks + the knockout
-    // picks being saved now — never trusted from the request body.
-    const totalGoals = computeTotalGoals(pool.participants[idx].picks, koPicks);
+    // Preserve locked picks from existing even if not in raw
+    for (const [id, v] of Object.entries(existing)) {
+      if (KO_IDS.has(id) && isMatchPickLocked(id, now) && !koPicks[id]) {
+        koPicks[id] = v;
+      }
+    }
 
-    // Champion is an explicit, independent pick (any team) for the +10 bonus.
-    // If the player hasn't chosen one, fall back to the bracket final winner.
+    if (lockedAttempts.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: 'Some matches are locked (closes 1 hour before kickoff).' },
+        { status: 403 },
+      );
+    }
+
+    const totalGoals = computeTotalGoals(pool.participants[idx].picks, koPicks);
     const rawChampion = typeof body.champion === 'string' ? body.champion.trim() : '';
     const champion = TEAM_SET.has(rawChampion)
       ? rawChampion

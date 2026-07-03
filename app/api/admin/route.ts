@@ -100,6 +100,31 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'setRoundFixtures': {
+        const round = String(body.round || '') as keyof typeof pool.koBracket;
+        const validRounds = ['r16', 'qf', 'sf', '3rd', 'final'] as const;
+        if (!validRounds.includes(round as any)) {
+          return NextResponse.json({ ok: false, error: 'Invalid round.' }, { status: 400 });
+        }
+        const fixtures: KoFixture[] = [];
+        for (const f of body.fixtures || []) {
+          const id = String(f.id || '');
+          const meta = KO_BY_ID.get(id);
+          if (!meta || meta.round !== round) continue;
+          const home = String(f.home || '');
+          const away = String(f.away || '');
+          if (home && !TEAM_SET.has(home)) {
+            return NextResponse.json({ ok: false, error: `Unknown team: ${home}` }, { status: 400 });
+          }
+          if (away && !TEAM_SET.has(away)) {
+            return NextResponse.json({ ok: false, error: `Unknown team: ${away}` }, { status: 400 });
+          }
+          fixtures.push({ id, home, away });
+        }
+        (pool.koBracket as any)[round] = fixtures;
+        break;
+      }
+
       case 'lockR32': {
         if (pool.koBracket.r32.length !== 16) {
           return NextResponse.json(
