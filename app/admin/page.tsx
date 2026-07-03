@@ -470,15 +470,28 @@ function FixtureEditor({
   }, [pool, round, isR32, matchIds, results]);
 
   const [rows, setRows] = useState(initial);
+  const [correctionMode, setCorrectionMode] = useState(false);
   useEffect(() => setRows(initial), [initial]);
 
   function upd(i: number, side: 'home' | 'away', v: string) {
     setRows((r) => r.map((row, idx) => (idx === i ? { ...row, [side]: v } : row)));
   }
 
+  function enableCorrectionMode() {
+    const first = window.confirm(
+      'Correction Mode lets you change official teams that players may already have picked. Continue?',
+    );
+    if (!first) return;
+    const second = window.confirm(
+      'Final warning: changing an official matchup can affect player picks and will clear this match result if teams changed.',
+    );
+    if (!second) return;
+    setCorrectionMode(true);
+  }
+
   const saveAction = isR32
-    ? { action: 'setR32', fixtures: rows }
-    : { action: 'setRoundFixtures', round, fixtures: rows };
+    ? { action: 'setR32', fixtures: rows, overrideOfficialFixtures: correctionMode }
+    : { action: 'setRoundFixtures', round, fixtures: rows, overrideOfficialFixtures: correctionMode };
 
   return (
     <>
@@ -496,14 +509,14 @@ function FixtureEditor({
                 value={row.home}
                 onChange={(v) => upd(i, 'home', v)}
                 placeholder="-- home team --"
-                disabled={!!initial[i]?.home}
+                disabled={!!initial[i]?.home && !correctionMode}
               />
               <div className="fx-vs"><span>VS</span></div>
               <TeamSelect
                 value={row.away}
                 onChange={(v) => upd(i, 'away', v)}
                 placeholder="-- away team --"
-                disabled={!!initial[i]?.away}
+                disabled={!!initial[i]?.away && !correctionMode}
               />
             </div>
           );
@@ -512,14 +525,26 @@ function FixtureEditor({
       <div className="row" style={{ marginTop: 16 }}>
         <button
           className="btn btn-primary btn-sm"
-          onClick={() => act(saveAction, isR32 ? 'Fixtures saved — open to players' : `${round} fixtures saved`)}
+          onClick={() => act(saveAction, correctionMode ? 'Official matchup correction saved' : isR32 ? 'Fixtures saved — open to players' : `${round} fixtures saved`)}
         >
-          Save fixtures
+          {correctionMode ? 'Save official correction' : 'Save fixtures'}
         </button>
+        {!correctionMode && (
+          <button className="btn btn-danger btn-sm" type="button" onClick={enableCorrectionMode}>
+            Correction Mode
+          </button>
+        )}
+        {correctionMode && (
+          <button className="btn btn-ghost btn-sm" type="button" onClick={() => setCorrectionMode(false)}>
+            Cancel correction mode
+          </button>
+        )}
         <span className="muted small" style={{ alignSelf: 'center' }}>
-          {isR32
-            ? 'Save official matchups. Team slots cannot be changed once saved.'
-            : 'Set official matchups manually or let them autofill from results. Team slots cannot be changed once saved.'}
+          {correctionMode
+            ? 'Correction Mode is active. Use it only to fix an official matchup mistake.'
+            : isR32
+              ? 'Save official matchups. Use Correction Mode if a saved official team must be fixed.'
+              : 'Set official matchups manually or let them autofill from results. Use Correction Mode to fix saved official teams.'}
         </span>
       </div>
     </>

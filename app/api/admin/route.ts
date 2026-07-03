@@ -14,7 +14,15 @@ export async function GET() {
 const KO_BY_ID = new Map(KO_MATCH_IDS.map((m) => [m.id, m]));
 const TEAM_SET = new Set(TEAMS);
 
-function fixtureChangeError(existing: KoFixture | undefined, next: KoFixture): string | null {
+function fixtureChanged(existing: KoFixture | undefined, next: KoFixture): boolean {
+  return !!existing && (
+    (!!existing.home && !!next.home && existing.home !== next.home) ||
+    (!!existing.away && !!next.away && existing.away !== next.away)
+  );
+}
+
+function fixtureChangeError(existing: KoFixture | undefined, next: KoFixture, allowOverride: boolean): string | null {
+  if (allowOverride) return null;
   if (!existing) return null;
   if (existing.home && next.home && existing.home !== next.home) {
     return `${next.id} home team is already official and cannot be changed.`;
@@ -23,6 +31,11 @@ function fixtureChangeError(existing: KoFixture | undefined, next: KoFixture): s
     return `${next.id} away team is already official and cannot be changed.`;
   }
   return null;
+}
+
+function clearMatchResult(pool: Awaited<ReturnType<typeof readPool>>, matchId: string): void {
+  const match = pool.matches.find((m) => m.id === matchId);
+  if (match) match.result = undefined;
 }
 
 export async function POST(req: NextRequest) {
@@ -94,7 +107,9 @@ export async function POST(req: NextRequest) {
 
       case 'setR32': {
         // fixtures: [{id, home, away}] — validate ids + teams
+        const allowOverride = !!body.overrideOfficialFixtures;
         const fixtures: KoFixture[] = [];
+        const changedIds: string[] = [];
         for (const f of body.fixtures || []) {
           const id = String(f.id || '');
           if (!id.startsWith('R32-')) continue;
@@ -107,24 +122,33 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: false, error: `Unknown team: ${away}` }, { status: 400 });
           }
           const next = { id, home, away };
-          const err = fixtureChangeError(pool.koBracket.r32.find((x) => x.id === id), next);
+          const existing = pool.koBracket.r32.find((x) => x.id === id);
+          const err = fixtureChangeError(existing, next, allowOverride);
           if (err) return NextResponse.json({ ok: false, error: err }, { status: 400 });
+          if (fixtureChanged(existing, next)) changedIds.push(id);
           fixtures.push(next);
         }
         pool.koBracket.r32 = fixtures.map((f) => {
           const existing = pool.koBracket.r32.find((x) => x.id === f.id);
-          return { id: f.id, home: existing?.home || f.home, away: existing?.away || f.away };
+          return {
+            id: f.id,
+            home: allowOverride ? f.home : existing?.home || f.home,
+            away: allowOverride ? f.away : existing?.away || f.away,
+          };
         });
+        for (const id of changedIds) clearMatchResult(pool, id);
         break;
       }
 
       case 'setRoundFixtures': {
         const round = String(body.round || '') as keyof typeof pool.koBracket;
+        const allowOverride = !!body.overrideOfficialFixtures;
         const validRounds = ['r16', 'qf', 'sf', '3rd', 'final'] as const;
         if (!validRounds.includes(round as any)) {
           return NextResponse.json({ ok: false, error: 'Invalid round.' }, { status: 400 });
         }
         const fixtures: KoFixture[] = [];
+        const changedIds: string[] = [];
         for (const f of body.fixtures || []) {
           const id = String(f.id || '');
           const meta = KO_BY_ID.get(id);
@@ -140,16 +164,23 @@ export async function POST(req: NextRequest) {
           const existingRoundFixtures =
             ((pool.koBracket as any)[round] as KoFixture[] | undefined) || [];
           const next = { id, home, away };
-          const err = fixtureChangeError(existingRoundFixtures.find((x) => x.id === id), next);
+          const existing = existingRoundFixtures.find((x) => x.id === id);
+          const err = fixtureChangeError(existing, next, allowOverride);
           if (err) return NextResponse.json({ ok: false, error: err }, { status: 400 });
+          if (fixtureChanged(existing, next)) changedIds.push(id);
           fixtures.push(next);
         }
         const existingRoundFixtures =
           ((pool.koBracket as any)[round] as KoFixture[] | undefined) || [];
         (pool.koBracket as any)[round] = fixtures.map((f) => {
           const existing = existingRoundFixtures.find((x) => x.id === f.id);
-          return { id: f.id, home: existing?.home || f.home, away: existing?.away || f.away };
+          return {
+            id: f.id,
+            home: allowOverride ? f.home : existing?.home || f.home,
+            away: allowOverride ? f.away : existing?.away || f.away,
+          };
         });
+        for (const id of changedIds) clearMatchResult(pool, id);
         break;
       }
 
