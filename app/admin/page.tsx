@@ -7,7 +7,7 @@ import { TEAMS, KO_MATCH_IDS, KO_META, BRACKET_COLUMNS, GROUPS } from '@/lib/tou
 import { groupTable } from '@/lib/groupStandings';
 import TeamFlag from '@/components/TeamFlag';
 import type { Round, MatchResult, Match } from '@/lib/types';
-import { getActiveKoPickRound, countRoundFixturesSet } from '@/lib/roundPick';
+import { getMaxOpenPickRound, countRoundFixturesSet, countPartialTeamsInRound } from '@/lib/roundPick';
 
 type Toast = { msg: string; kind: 'ok' | 'err' } | null;
 
@@ -91,6 +91,10 @@ export default function AdminPage() {
   if (!pool) return <div className="card muted">Loading pool...</div>;
 
   const submitted = pool.participants.filter((p) => p.koSubmittedAt).length;
+  const koResults = Object.fromEntries(pool.matches.map((m) => [m.id, m.result])) as Record<
+    string,
+    MatchResult | undefined
+  >;
 
   return (
     <>
@@ -112,8 +116,8 @@ export default function AdminPage() {
               <span>Brackets submitted</span>
             </div>
             <div className="stat">
-              <strong>{getActiveKoPickRound(pool.settings).toUpperCase()}</strong>
-              <span>Active pick round</span>
+              <strong>{getMaxOpenPickRound(pool.koBracket, koResults).toUpperCase()}</strong>
+              <span>Max player round</span>
             </div>
           </div>
         </div>
@@ -349,6 +353,8 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
           const done = countRoundDone(t.key, pool, results);
           const fx =
             t.key !== 'grid' ? countRoundFixturesSet(t.key, pool.koBracket) : null;
+          const partial =
+            t.key !== 'grid' ? countPartialTeamsInRound(t.key, pool.koBracket, results) : 0;
           return (
             <button
               key={t.key}
@@ -358,6 +364,9 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
               title={t.hint}
             >
               {t.label}
+              {partial > 0 && partial !== fx?.set && (
+                <span className="round-tab-badge partial">{partial} started</span>
+              )}
               {fx && fx.set > 0 && (
                 <span className="round-tab-badge fixtures">{fx.set}/{fx.total}</span>
               )}
@@ -371,7 +380,7 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
         <AdminBracketGrid pool={pool} results={results} />
       ) : tab === 'r32' ? (
         <>
-          <RoundPickControl pool={pool} round="r32" act={act} />
+          <RoundPickControl pool={pool} round="r32" results={results} />
           <div className="console-subhead">1 · Set the matchups</div>
           <FixtureEditor pool={pool} act={act} round="r32" />
           <div className="row" style={{ marginTop: 8, marginBottom: 16 }}>
@@ -399,7 +408,7 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
         </>
       ) : (
         <>
-          <RoundPickControl pool={pool} round={tab} act={act} />
+          <RoundPickControl pool={pool} round={tab} results={results} />
           <div className="console-subhead">1 · Set the matchups</div>
           <FixtureEditor pool={pool} act={act} round={tab} results={results} />
           <div className="console-subhead spaced">2 · Enter the scores</div>
@@ -425,37 +434,26 @@ function countRoundDone(
 function RoundPickControl({
   pool,
   round,
-  act,
+  results,
 }: {
   pool: PoolResponse;
   round: Round;
-  act: (b: any, m?: string) => void;
+  results: Record<string, MatchResult | undefined>;
 }) {
-  const active = pool.settings.koPickRound || 'r32';
-  const isActive = active === round;
+  const max = getMaxOpenPickRound(pool.koBracket, results);
+  const partial = countPartialTeamsInRound(round, pool.koBracket, results);
+  const isOpen = partial > 0;
   return (
     <div className="row" style={{ marginBottom: 14, gap: 10 }}>
-      <span className="pill">
-        Player picks: {isActive ? `✓ ${round.toUpperCase()} active` : `viewing ${active}`}
+      {isOpen ? (
+        <span className="pill">Відкрито для гравців · {partial} матч(ів) з командою</span>
+      ) : (
+        <span className="pill">Закрито — виставте хоча б одну команду в будь-якому матчі</span>
+      )}
+      <span className="muted small">
+        Гравці бачать раунди до <strong>{max.toUpperCase()}</strong>. Можуть повертатись до попередніх,
+        якщо матчі ще не закриті.
       </span>
-      {!isActive && (
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={() => act({ action: 'setKoPickRound', round }, `Players can now pick ${round}`)}
-        >
-          Open {round.toUpperCase()} for player picks
-        </button>
-      )}
-      {isActive && (
-        <span className="muted small">
-          Гравці пікають лише цей раунд. Інші вкладки можна заповнювати заздалегідь — це їх не блокує.
-        </span>
-      )}
-      {!isActive && round !== 'r32' && (
-        <span className="muted small">
-          Команди тут можна зберегти до завершення попереднього раунду. Гравці не побачать, поки не натиснете Open.
-        </span>
-      )}
     </div>
   );
 }

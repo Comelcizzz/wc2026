@@ -4,7 +4,7 @@ import { getPlayerId } from '@/lib/auth';
 import { resultsFromMatches } from '@/lib/bracket';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
-import { canPickMatch, getActiveKoPickRound, roundOfMatchId } from '@/lib/roundPick';
+import { canPickMatch, roundOfMatchId } from '@/lib/roundPick';
 import { KO_MATCH_IDS, TEAMS } from '@/lib/tournament';
 import type { KoPicks } from '@/lib/types';
 
@@ -38,28 +38,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No knockout fixtures are open yet.' }, { status: 403 });
     }
 
-    const activeRound = getActiveKoPickRound(pool.settings);
     const results = resultsFromMatches(pool.matches);
     const existing = pool.participants[idx].koPicks || {};
     const raw = (body.koPicks || {}) as Record<string, any>;
 
-    // Start from existing — merge changes only for the active round's unlocked matches.
     const koPicks: KoPicks = { ...existing };
 
     for (const [id, v] of Object.entries(raw)) {
       if (!KO_IDS.has(id)) continue;
+      if (!roundOfMatchId(id)) continue;
 
-      const round = roundOfMatchId(id);
-      if (round !== activeRound) continue;
+      if (isMatchPickLocked(id, now)) continue;
 
-      if (isMatchPickLocked(id, now)) {
-        // Keep existing pick for this match; ignore the change.
-        continue;
-      }
-
-      if (!canPickMatch(id, pool.settings, pool.koBracket, results, now)) {
-        continue;
-      }
+      if (!canPickMatch(id, pool.koBracket, results, now)) continue;
 
       if (!v) {
         delete koPicks[id];
@@ -87,7 +78,7 @@ export async function POST(req: NextRequest) {
     };
 
     await writePool(pool);
-    return NextResponse.json({ ok: true, activeRound });
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }
