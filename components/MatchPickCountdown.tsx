@@ -15,12 +15,12 @@ export default function MatchPickCountdown({ matchId }: { matchId: string }) {
 
   if (ms == null) return null;
   if (ms <= 0) {
-    return <span className="match-lock-badge locked">Закрито</span>;
+    return <span className="match-lock-badge locked">Locked</span>;
   }
   const urgent = ms < 60 * 60 * 1000;
   return (
     <span className={`match-lock-badge${urgent ? ' urgent' : ''}`}>
-      {urgent ? 'Скоро закриється · ' : 'Відкрито · '}
+      {urgent ? 'Locks soon · ' : 'Open · '}
       {formatDuration(ms)}
     </span>
   );

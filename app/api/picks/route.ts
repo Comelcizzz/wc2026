@@ -5,13 +5,12 @@ import { resultsFromMatches } from '@/lib/bracket';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { canPickMatch, roundOfMatchId } from '@/lib/roundPick';
-import { KO_MATCH_IDS, TEAMS } from '@/lib/tournament';
+import { KO_MATCH_IDS } from '@/lib/tournament';
 import type { KoPicks } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 const KO_IDS = new Set(KO_MATCH_IDS.map((m) => m.id));
-const TEAM_SET = new Set(TEAMS);
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,8 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const totalGoals = computeTotalGoals(pool.participants[idx].picks, koPicks);
-    const rawChampion = typeof body.champion === 'string' ? body.champion.trim() : '';
-    const champion = TEAM_SET.has(rawChampion) ? rawChampion : pool.participants[idx].champion || '';
+    const champion = pool.participants[idx].champion || '';
 
     pool.participants[idx] = {
       ...pool.participants[idx],

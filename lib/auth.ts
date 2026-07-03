@@ -5,10 +5,7 @@ import type { PoolData } from './types';
 
 // ── Deadline / lock ──
 export function isLocked(pool: PoolData): boolean {
-  if (pool.settings.status === 'locked') return true;
-  const dl = pool.settings.picksDeadline;
-  if (!dl) return false;
-  return Date.now() > new Date(dl).getTime();
+  return pool.settings.status === 'locked';
 }
 
 // ── Admin auth (httpOnly cookie holding the shared secret) ──

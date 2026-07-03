@@ -1,9 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Countdown from '@/components/Countdown';
 import { usePool } from '@/lib/usePool';
-import { formatDeadline } from '@/lib/format';
 import { POINTS, ROUND_LABELS } from '@/lib/tournament';
 
 const STEPS = [
@@ -16,8 +14,8 @@ const STEPS = [
   {
     n: 2,
     icon: '🗺️',
-    title: 'Draft the bracket',
-    body: 'Predict winners and exact scores for every knockout match, Round of 32 all the way to the Final.',
+    title: 'Pick official matchups',
+    body: 'Predict exact scores for official knockout matches as the admin opens each round.',
   },
   {
     n: 3,
@@ -49,8 +47,6 @@ export default function HomePage() {
   const p1 = Math.floor(paidTotal * (s.prizeFirst || 70) / 100);
   const p2 = Math.floor(paidTotal * (s.prizeSecond || 20) / 100);
   const p3 = Math.floor(paidTotal * (s.prizeThird || 10) / 100);
-  const deadline = formatDeadline(s.picksDeadline);
-
   const roundCards = [
     { key: 'group', label: 'Group Stage', outcome: 1, exact: 3, note: 'carried over' },
     ...(['r32', 'r16', 'qf', 'sf', '3rd', 'final'] as const).map((r) => ({
@@ -70,8 +66,8 @@ export default function HomePage() {
           <span className="rules-eyebrow">FIFA World Cup 2026 · Knockout Re-Draft</span>
           <h1 className="rules-hero-title">How the Pool Works</h1>
           <p className="rules-hero-sub">
-            Group points carry over. Everyone re-drafts one full knockout bracket — winners and
-            exact scores from the Round of 32 to the Final. Sharpest bracket wins the pot.
+            Group points carry over. Pick scores for official knockout matchups as they open,
+            and keep editing each match until its 1-hour kickoff cutoff.
           </p>
           <div className="rules-hero-stats">
             <div className="rules-hero-stat">
@@ -94,9 +90,11 @@ export default function HomePage() {
         </div>
         <div className="rules-hero-countdown">
           <div className={`status-flag ${pool.locked ? 'locked' : 'open'}`}>
-            {pool.locked ? '🔒 Picks locked' : '🟢 Picks open'}
+            {pool.locked ? '🔒 Emergency stop active' : '🟢 Picks open'}
           </div>
-          <Countdown deadline={s.picksDeadline} />
+          <div className="card muted small" style={{ marginTop: 10 }}>
+            Each match locks 1 hour before kickoff (Toronto time).
+          </div>
         </div>
       </section>
 
@@ -192,12 +190,12 @@ export default function HomePage() {
           <div className="card rules-block">
             <h2 className="rules-block-title">📋 Rules</h2>
             <ul className="rules-list">
-              <li>All knockout picks due before <strong>{deadline}</strong></li>
-              <li>Every match needs a score; draws need an ET / penalties winner</li>
-              <li>One submission per name — contact the admin to change picks</li>
+              <li>Each official matchup locks 1 hour before kickoff (Toronto time)</li>
+              <li>Every knockout pick needs a score; draws need an ET / penalties winner</li>
+              <li>You can edit unlocked matches as often as you want</li>
               <li>Results are entered by the admin as matches are played</li>
               <li>Cash paid in person — ${fee} entry fee</li>
-              <li>Re-draft opens once the admin locks the official R32 matchups</li>
+              <li>Rounds open when official matchups are set by the admin</li>
             </ul>
           </div>
         </div>
