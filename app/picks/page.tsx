@@ -172,7 +172,7 @@ export default function PicksPage() {
     if (!pool || adminLocked) return;
     if (!canPickMatch(id, pool.koBracket, koResultsMap)) {
       if (isMatchPickLocked(id)) {
-        flashLock('This match is locked — less than 1 hour to kickoff (Toronto time).');
+        flashLock('Pick cutoff has passed for this match (1 hour before kickoff, Toronto time).');
       }
       return;
     }
@@ -192,7 +192,7 @@ export default function PicksPage() {
   function setEt(id: string, team: string) {
     if (!pool || adminLocked) return;
     if (!canPickMatch(id, pool.koBracket, koResultsMap)) {
-      if (isMatchPickLocked(id)) flashLock('This match is locked — less than 1 hour to kickoff (Toronto time).');
+      if (isMatchPickLocked(id)) flashLock('Pick cutoff has passed for this match (1 hour before kickoff, Toronto time).');
       return;
     }
     setKoPicks((prev) => ({ ...prev, [id]: { ...(prev[id] as any), et: team } }));
@@ -337,6 +337,7 @@ export default function PicksPage() {
           maxRound={maxOpenRound}
           matchIds={pickableMatchIds}
           koPicks={koPicks}
+          teamsById={resolved}
         />
       )}
 
@@ -961,9 +962,6 @@ function ListMatchCard({
         </span>
       </div>
       {!ready && <div className="ko-not-ready">Waiting for official teams</div>}
-      {ready && matchLocked && (
-        <div className="ko-not-ready urgent">This match is locked — less than 1 hour to kickoff (Toronto time)</div>
-      )}
       {ready && isDraw && (
         <div className="et-row">
           <span className="muted">ET / pens winner</span>
