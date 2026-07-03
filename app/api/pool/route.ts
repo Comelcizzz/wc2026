@@ -9,6 +9,9 @@ export async function GET() {
   try {
     const pool = await readPool();
     const standings = calcScores(pool);
+    const commentCounts = Object.fromEntries(
+      Object.entries(pool.matchComments || {}).map(([matchId, comments]) => [matchId, comments.length]),
+    );
     // Strip secrets from the public payload.
     const participants = pool.participants.map(({ email, passHash, passSalt, ...p }) => p);
     return NextResponse.json({
@@ -18,6 +21,7 @@ export async function GET() {
       matches: pool.matches,
       participants,
       standings: standings.map(({ email, passHash, passSalt, ...s }) => s),
+      commentCounts,
       locked: isLocked(pool),
       now: new Date().toISOString(),
     });

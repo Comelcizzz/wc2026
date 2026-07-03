@@ -227,16 +227,6 @@ export default function PicksPage() {
     await persist(clean, 'Saved. You can edit any unlocked match until its 1-hour cutoff.');
   }
 
-  async function clearAll() {
-    if (Object.keys(koPicks).length === 0) {
-      return flash('You have no knockout picks to clear.', 'err');
-    }
-    if (!window.confirm('Clear ALL your knockout picks? Your group-stage picks stay untouched.')) {
-      return;
-    }
-    await persist({}, 'Knockout picks cleared.');
-  }
-
   if (!pool) return <div className="card muted">Loading...</div>;
 
   const filled = KO_MATCH_IDS.filter((m) => koPicks[m.id] != null).length;
@@ -446,6 +436,7 @@ export default function PicksPage() {
                   adminLocked={adminLocked}
                   pool={pool}
                   koResultsMap={koResultsMap}
+                  commentCounts={pool.commentCounts || {}}
                   identified={identified}
                 />
               )}
@@ -487,9 +478,6 @@ export default function PicksPage() {
                 <div className="row sticky-submit">
                   <button className="btn btn-primary" onClick={submit} disabled={saving}>
                     {saving ? 'Saving...' : 'Submit / update picks'}
-                  </button>
-                  <button className="btn btn-ghost btn-sm" onClick={clearAll} disabled={saving}>
-                    Clear all
                   </button>
                   <span className="muted small">
                     Save any time — each match locks 1 hour before kickoff. Pick a few rounds now and finish later.
@@ -839,6 +827,7 @@ function RoundView({
   adminLocked,
   pool,
   koResultsMap,
+  commentCounts,
   identified,
 }: {
   round: Round;
@@ -850,6 +839,7 @@ function RoundView({
   adminLocked: boolean;
   pool: PoolResponse;
   koResultsMap: Record<string, MatchResult | undefined>;
+  commentCounts: Record<string, number>;
   identified: boolean;
 }) {
   const matches = useMemo(() => KO_MATCH_IDS.filter((m) => m.round === round), [round]);
@@ -890,6 +880,7 @@ function RoundView({
                 setEt={setEt}
                 result={results[match.id]}
                 pickable={!adminLocked && canPickMatch(match.id, pool.koBracket, koResultsMap)}
+                commentCount={commentCounts[match.id] || 0}
                 identified={identified}
               />
             ))}
@@ -908,6 +899,7 @@ function ListMatchCard({
   setEt,
   result,
   pickable,
+  commentCount,
   identified,
 }: {
   match: { id: string; round: Round; label: string };
@@ -917,6 +909,7 @@ function ListMatchCard({
   setEt: (id: string, team: string) => void;
   result?: MatchResult;
   pickable?: boolean;
+  commentCount?: number;
   identified?: boolean;
 }) {
   const home = teams?.home;
@@ -976,7 +969,7 @@ function ListMatchCard({
         </div>
       )}
       <KoResultStrip match={match} teams={teams} pick={pick} result={result} />
-      <MatchComments matchId={match.id} identified={!!identified} />
+      <MatchComments matchId={match.id} identified={!!identified} initialCount={commentCount || 0} />
     </div>
   );
 }
