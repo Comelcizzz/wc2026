@@ -82,8 +82,8 @@ function manualFixture(bracket: KoBracket, matchId: string): SideTeams | null {
   if (!round || round === 'r32' || round === 'group') return null;
   const fixtures = bracket[round as keyof KoBracket] as { id: string; home: string; away: string }[] | undefined;
   const fx = fixtures?.find((f) => f.id === matchId);
-  if (fx?.home && fx?.away) return { home: fx.home, away: fx.away };
-  return null;
+  if (!fx || (!fx.home && !fx.away)) return null;
+  return { home: fx.home || null, away: fx.away || null };
 }
 
 export function resultsFromMatches(matches: Match[]): Record<string, MatchResult | undefined> {

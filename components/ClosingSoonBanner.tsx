@@ -7,10 +7,10 @@ import type { UpcomingMatch } from '@/lib/matchSchedule';
 
 export default function ClosingSoonBanner({
   nowIso,
-  activeRound,
+  maxRound,
 }: {
   nowIso?: string;
-  activeRound: Round;
+  maxRound: Round;
 }) {
   const [now, setNow] = useState(() => (nowIso ? new Date(nowIso).getTime() : Date.now()));
 
@@ -19,9 +19,9 @@ export default function ClosingSoonBanner({
     return () => clearInterval(i);
   }, []);
 
-  const closing = matchesClosingSoon(now, 60 * 60 * 1000, activeRound);
+  const closing = matchesClosingSoon(now, 60 * 60 * 1000, maxRound);
   const closingIds = new Set(closing.map((m) => m.id));
-  const upcoming = upcomingOpenMatches(now, 2, activeRound).filter((m) => !closingIds.has(m.id));
+  const upcoming = upcomingOpenMatches(now, 2, maxRound).filter((m) => !closingIds.has(m.id));
 
   if (closing.length === 0 && upcoming.length === 0) return null;
 
@@ -42,7 +42,7 @@ export default function ClosingSoonBanner({
       )}
       {upcoming.length > 0 && (
         <div className="closing-soon-next">
-          <strong>Наступні матчі для піків · {ROUND_LABELS[activeRound]}</strong>
+          <strong>Наступні матчі · до {ROUND_LABELS[maxRound]}</strong>
           <div className="closing-soon-list">
             {upcoming.map((m) => (
               <ClosingMatchChip key={m.id} match={m} now={now} />

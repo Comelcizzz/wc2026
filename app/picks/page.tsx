@@ -8,7 +8,7 @@ import { getPool, postJSON, type PoolResponse } from '@/lib/clientApi';
 import { getCachedPool } from '@/lib/usePool';
 import { resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
-import { canPickMatch, getActiveKoPickRound } from '@/lib/roundPick';
+import { canPickMatch, getMaxOpenPickRound, isRoundAccessible } from '@/lib/roundPick';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { gradeGroupMatch, gradeKoMatch } from '@/lib/scoring';
 import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS, TEAMS } from '@/lib/tournament';
@@ -40,6 +40,10 @@ const TAB_LABELS: Record<PageTab, string> = {
 // visible navigation for now. The component + its render branch are kept below
 // so the tab can be re-enabled later by re-adding it here.
 const PAGE_TABS: PageTab[] = ['group', ...KO_ROUNDS];
+
+function isKoRoundTab(tab: PageTab): tab is Round {
+  return tab !== 'group' && tab !== 'bracket';
+}
 
 export default function PicksPage() {
   const [pool, setPool] = useState<PoolResponse | null>(() => getCachedPool());
@@ -154,7 +158,7 @@ export default function PicksPage() {
     () => (pool ? resultsFromMatches(pool.matches) : {}),
     [pool],
   );
-  const activeKoRound = pool ? getActiveKoPickRound(pool.settings) : 'r32';
+  const maxOpenRound = pool ? getMaxOpenPickRound(pool.koBracket, koResultsMap) : 'r32';
   const adminLocked = pool?.settings.status === 'locked';
   const resolved = useMemo(() => {
     const map: Record<string, { home: string | null; away: string | null } | null> = {};
@@ -167,7 +171,7 @@ export default function PicksPage() {
 
   function setScore(id: string, side: 'h' | 'a', val: string) {
     if (!pool || adminLocked) return;
-    if (!canPickMatch(id, pool.settings, pool.koBracket, koResultsMap)) {
+    if (!canPickMatch(id, pool.koBracket, koResultsMap)) {
       if (isMatchPickLocked(id)) {
         flashLock('Цей матч закрито — менше години до початку (час Торонто).');
       }
@@ -188,7 +192,7 @@ export default function PicksPage() {
 
   function setEt(id: string, team: string) {
     if (!pool || adminLocked) return;
-    if (!canPickMatch(id, pool.settings, pool.koBracket, koResultsMap)) {
+    if (!canPickMatch(id, pool.koBracket, koResultsMap)) {
       if (isMatchPickLocked(id)) flashLock('Цей матч закрито — менше години до початку (час Торонто).');
       return;
     }
@@ -341,7 +345,7 @@ export default function PicksPage() {
       </section>
 
       {identified && bracketOpen && (
-        <ClosingSoonBanner nowIso={pool.now} activeRound={activeKoRound} />
+        <ClosingSoonBanner nowIso={pool.now} maxRound={maxOpenRound} />
       )}
 
       {!identified ? (
@@ -367,17 +371,20 @@ export default function PicksPage() {
           <SessionCard name={name} filled={filled} logout={logout} />
 
           <div className="page-tabs scrollable">
-            {PAGE_TABS.map((tab) => (
+            {PAGE_TABS.map((tab) => {
+              const koTab = tab !== 'group' && tab !== 'bracket';
+              const accessible = !koTab || isRoundAccessible(tab as Round, pool.koBracket, koResultsMap);
+              return (
               <button
                 key={tab}
                 type="button"
-                className={`page-tab${pageTab === tab ? ' active' : ''}${tab !== 'group' && tab !== activeKoRound ? ' round-closed' : ''}`}
+                className={`page-tab${pageTab === tab ? ' active' : ''}${koTab && !accessible ? ' round-closed' : ''}`}
                 onClick={() => switchTab(tab)}
               >
                 {TAB_LABELS[tab]}
-                {tab === activeKoRound && tab !== 'group' && <span className="page-tab-live">live</span>}
+                {tab === maxOpenRound && koTab && <span className="page-tab-live">новий</span>}
               </button>
-            ))}
+            );})}
           </div>
 
           {hasAnyResult && (
@@ -407,21 +414,23 @@ export default function PicksPage() {
                 </div>
               )}
 
-              {pageTab !== activeKoRound && pageTab !== 'bracket' && !adminLocked && (
+              {isKoRoundTab(pageTab) && !isRoundAccessible(pageTab, pool.koBracket, koResultsMap) && !adminLocked && (
                 <div className="card muted">
-                  <strong>{TAB_LABELS[pageTab]} — тільки перегляд</strong>
+                  <strong>{TAB_LABELS[pageTab]} — ще не відкрито</strong>
                   <p className="muted small" style={{ marginTop: 6 }}>
-                    Зараз можна пікати лише <strong>{ROUND_LABELS[activeKoRound]}</strong>. Цей раунд відкриється пізніше.
+                    Раунд з&apos;явиться, коли адмін виставить <strong>хоча б одну команду</strong> у будь-якому
+                    матчі цього раунду. Зараз доступно до <strong>{ROUND_LABELS[maxOpenRound]}</strong>.
                   </p>
                 </div>
               )}
 
-              {pageTab === activeKoRound && !adminLocked && (
+              {isKoRoundTab(pageTab) && isRoundAccessible(pageTab, pool.koBracket, koResultsMap) && !adminLocked && (
                 <div className="card repick-banner">
-                  <strong>Активний раунд: {ROUND_LABELS[activeKoRound]}</strong>
+                  <strong>Доступно: {ROUND_LABELS.r32} → {ROUND_LABELS[maxOpenRound]}</strong>
                   <p className="muted small" style={{ marginTop: 6 }}>
-                    Обирайте рахунки лише для цього раунду. Кожен матч закривається за 1 годину до початку (час Торонто).
-                    Змінюйте скільки завгодно — поки не закриється.
+                    Можна повертатись до попередніх раундів, якщо матчі ще відкриті (більше години до початку).
+                    Наступний раунд відкриється, коли адмін виставить хоча б одну команду там.
+                    Кожен матч закривається окремо за 1 год до kickoff (час Торонто).
                   </p>
                 </div>
               )}
@@ -436,7 +445,6 @@ export default function PicksPage() {
                   setScore={setScore}
                   setEt={setEt}
                   results={koResults}
-                  activeRound={activeKoRound}
                   adminLocked={adminLocked}
                   pool={pool}
                   koResultsMap={koResultsMap}
@@ -444,7 +452,8 @@ export default function PicksPage() {
                 />
               )}
 
-              {!adminLocked && currentRoundComplete && nextTab && pageTab === activeKoRound && (
+              {!adminLocked && currentRoundComplete && nextTab && isKoRoundTab(pageTab) &&
+                (nextTab === 'group' || isKoRoundTab(nextTab) && isRoundAccessible(nextTab, pool.koBracket, koResultsMap)) && (
                 <div className="next-stage-bar">
                   <span>All {TAB_LABELS[pageTab]} matches picked.</span>
                   <button className="btn btn-secondary btn-sm" onClick={() => switchTab(nextTab)}>
@@ -466,7 +475,7 @@ export default function PicksPage() {
                     className="team-select-flag champion-select"
                     value={champion}
                     onChange={(e) => saveChampion(e.target.value)}
-                    disabled={saving || adminLocked || pageTab !== activeKoRound}
+                    disabled={saving || adminLocked}
                   >
                     <option value="">— Select champion —</option>
                     {[...TEAMS].sort((a, b) => a.localeCompare(b)).map((t) => (
@@ -488,7 +497,7 @@ export default function PicksPage() {
                 <span className="tiebreaker-value">{autoTotalGoals}</span>
               </div>
 
-              {!adminLocked && pageTab === activeKoRound && (
+              {!adminLocked && (
                 <div className="row sticky-submit">
                   <button className="btn btn-primary" onClick={submit} disabled={saving}>
                     {saving ? 'Saving...' : 'Submit / update picks'}
@@ -796,7 +805,6 @@ function RoundView({
   setScore,
   setEt,
   results,
-  activeRound,
   adminLocked,
   pool,
   koResultsMap,
@@ -808,14 +816,12 @@ function RoundView({
   setScore: (id: string, side: 'h' | 'a', v: string) => void;
   setEt: (id: string, team: string) => void;
   results: Record<string, MatchResult>;
-  activeRound: Round;
   adminLocked: boolean;
   pool: PoolResponse;
   koResultsMap: Record<string, MatchResult | undefined>;
   identified: boolean;
 }) {
   const matches = useMemo(() => KO_MATCH_IDS.filter((m) => m.round === round), [round]);
-  const roundIsActive = round === activeRound && !adminLocked;
   const ready = matches.filter((m) => {
     const t = resolved[m.id];
     return t?.home && t?.away;
@@ -852,7 +858,7 @@ function RoundView({
                 setScore={setScore}
                 setEt={setEt}
                 result={results[match.id]}
-                pickable={roundIsActive && canPickMatch(match.id, pool.settings, pool.koBracket, koResultsMap)}
+                pickable={!adminLocked && canPickMatch(match.id, pool.koBracket, koResultsMap)}
                 identified={identified}
               />
             ))}

@@ -1149,6 +1149,10 @@ label.lbl {
   background: rgba(25, 195, 125, .15);
   color: var(--green);
 }
+.round-tab-badge.partial {
+  background: rgba(255, 200, 80, .12);
+  color: #ffc850;
+}
 
 .console-subhead {
   font-size: 12px;
