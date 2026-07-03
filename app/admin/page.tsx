@@ -7,6 +7,7 @@ import { TEAMS, KO_MATCH_IDS, KO_META, BRACKET_COLUMNS, GROUPS } from '@/lib/tou
 import { groupTable } from '@/lib/groupStandings';
 import TeamFlag from '@/components/TeamFlag';
 import type { Round, MatchResult, Match } from '@/lib/types';
+import { getActiveKoPickRound } from '@/lib/roundPick';
 
 type Toast = { msg: string; kind: 'ok' | 'err' } | null;
 
@@ -111,8 +112,8 @@ export default function AdminPage() {
               <span>Brackets submitted</span>
             </div>
             <div className="stat">
-              <strong>{pool.koBracket.locked ? 'Open' : 'Setup'}</strong>
-              <span>Redraft state</span>
+              <strong>{getActiveKoPickRound(pool.settings).toUpperCase()}</strong>
+              <span>Active pick round</span>
             </div>
           </div>
         </div>
@@ -363,6 +364,7 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
         <AdminBracketGrid pool={pool} results={results} />
       ) : tab === 'r32' ? (
         <>
+          <RoundPickControl pool={pool} round="r32" act={act} />
           <div className="console-subhead">1 · Set the matchups</div>
           <FixtureEditor pool={pool} act={act} round="r32" />
           <div className="row" style={{ marginTop: 8, marginBottom: 16 }}>
@@ -390,6 +392,7 @@ function BracketConsole({ pool, act }: { pool: PoolResponse; act: (b: any, m?: s
         </>
       ) : (
         <>
+          <RoundPickControl pool={pool} round={tab} act={act} />
           <div className="console-subhead">1 · Set the matchups</div>
           <FixtureEditor pool={pool} act={act} round={tab} results={results} />
           <div className="console-subhead spaced">2 · Enter the scores</div>
@@ -410,6 +413,39 @@ function countRoundDone(
   const ids = KO_MATCH_IDS.filter((m) => m.round === tab);
   const done = ids.filter((m) => results[m.id]?.winner).length;
   return `${done}/${ids.length}`;
+}
+
+function RoundPickControl({
+  pool,
+  round,
+  act,
+}: {
+  pool: PoolResponse;
+  round: Round;
+  act: (b: any, m?: string) => void;
+}) {
+  const active = pool.settings.koPickRound || 'r32';
+  const isActive = active === round;
+  return (
+    <div className="row" style={{ marginBottom: 14, gap: 10 }}>
+      <span className="pill">
+        Player picks: {isActive ? `✓ ${round.toUpperCase()} active` : `viewing ${active}`}
+      </span>
+      {!isActive && (
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => act({ action: 'setKoPickRound', round }, `Players can now pick ${round}`)}
+        >
+          Open {round.toUpperCase()} for player picks
+        </button>
+      )}
+      {isActive && (
+        <span className="muted small">
+          Гравці бачать лише цей раунд. Наступні раунди можна готувати — це їх не блокує.
+        </span>
+      )}
+    </div>
+  );
 }
 
 function FixtureEditor({

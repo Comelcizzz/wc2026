@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readPool, writePool } from '@/lib/poolStore';
-import { isLocked, getPlayerId } from '@/lib/auth';
-import { predictedWinnerOf } from '@/lib/bracket';
+import { getPlayerId } from '@/lib/auth';
+import { resultsFromMatches } from '@/lib/bracket';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
+import { canPickMatch, getActiveKoPickRound, roundOfMatchId } from '@/lib/roundPick';
 import { KO_MATCH_IDS, TEAMS } from '@/lib/tournament';
 import type { KoPicks } from '@/lib/types';
 
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
     const pool = await readPool();
     const now = Date.now();
 
+    if (pool.settings.status === 'locked') {
+      return NextResponse.json({ ok: false, error: 'Picks are locked by the admin.' }, { status: 403 });
+    }
+
     const idx = pool.participants.findIndex((p) => p.id === playerId);
     if (idx < 0) {
       return NextResponse.json({ ok: false, error: 'Your account was not found.' }, { status: 404 });
@@ -32,34 +37,35 @@ export async function POST(req: NextRequest) {
     if (!anyOpen) {
       return NextResponse.json({ ok: false, error: 'No knockout fixtures are open yet.' }, { status: 403 });
     }
-    if (isLocked(pool)) {
-      return NextResponse.json({ ok: false, error: 'The deadline has passed. Picks are locked.' }, { status: 403 });
-    }
 
+    const activeRound = getActiveKoPickRound(pool.settings);
+    const results = resultsFromMatches(pool.matches);
     const existing = pool.participants[idx].koPicks || {};
     const raw = (body.koPicks || {}) as Record<string, any>;
-    const koPicks: KoPicks = {};
-    const lockedAttempts: string[] = [];
 
-    // Start from existing picks; apply incoming changes only for unlocked matches.
-    for (const [id, v] of Object.entries(existing)) {
-      if (KO_IDS.has(id) && !isMatchPickLocked(id, now)) {
-        // Will be overwritten or dropped below if present in raw
-      } else if (KO_IDS.has(id)) {
-        koPicks[id] = v;
-      }
-    }
+    // Start from existing — merge changes only for the active round's unlocked matches.
+    const koPicks: KoPicks = { ...existing };
 
     for (const [id, v] of Object.entries(raw)) {
       if (!KO_IDS.has(id)) continue;
+
+      const round = roundOfMatchId(id);
+      if (round !== activeRound) continue;
+
       if (isMatchPickLocked(id, now)) {
-        if (existing[id]) lockedAttempts.push(id);
+        // Keep existing pick for this match; ignore the change.
         continue;
       }
+
+      if (!canPickMatch(id, pool.settings, pool.koBracket, results, now)) {
+        continue;
+      }
+
       if (!v) {
         delete koPicks[id];
         continue;
       }
+
       const h = Number(v.h);
       const a = Number(v.a);
       if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0) continue;
@@ -68,25 +74,9 @@ export async function POST(req: NextRequest) {
       koPicks[id] = pick;
     }
 
-    // Preserve locked picks from existing even if not in raw
-    for (const [id, v] of Object.entries(existing)) {
-      if (KO_IDS.has(id) && isMatchPickLocked(id, now) && !koPicks[id]) {
-        koPicks[id] = v;
-      }
-    }
-
-    if (lockedAttempts.length > 0) {
-      return NextResponse.json(
-        { ok: false, error: 'Some matches are locked (closes 1 hour before kickoff).' },
-        { status: 403 },
-      );
-    }
-
     const totalGoals = computeTotalGoals(pool.participants[idx].picks, koPicks);
     const rawChampion = typeof body.champion === 'string' ? body.champion.trim() : '';
-    const champion = TEAM_SET.has(rawChampion)
-      ? rawChampion
-      : predictedWinnerOf('FINAL', koPicks, pool.koBracket) || '';
+    const champion = TEAM_SET.has(rawChampion) ? rawChampion : pool.participants[idx].champion || '';
 
     pool.participants[idx] = {
       ...pool.participants[idx],
@@ -97,7 +87,7 @@ export async function POST(req: NextRequest) {
     };
 
     await writePool(pool);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, activeRound });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }

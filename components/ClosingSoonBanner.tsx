@@ -2,9 +2,16 @@
 import { useEffect, useState } from 'react';
 import { formatDuration, matchesClosingSoon, upcomingOpenMatches } from '@/lib/matchSchedule';
 import { ROUND_LABELS } from '@/lib/tournament';
+import type { Round } from '@/lib/types';
 import type { UpcomingMatch } from '@/lib/matchSchedule';
 
-export default function ClosingSoonBanner({ nowIso }: { nowIso?: string }) {
+export default function ClosingSoonBanner({
+  nowIso,
+  activeRound,
+}: {
+  nowIso?: string;
+  activeRound: Round;
+}) {
   const [now, setNow] = useState(() => (nowIso ? new Date(nowIso).getTime() : Date.now()));
 
   useEffect(() => {
@@ -12,8 +19,9 @@ export default function ClosingSoonBanner({ nowIso }: { nowIso?: string }) {
     return () => clearInterval(i);
   }, []);
 
-  const closing = matchesClosingSoon(now);
-  const upcoming = upcomingOpenMatches(now, 2);
+  const closing = matchesClosingSoon(now, 60 * 60 * 1000, activeRound);
+  const closingIds = new Set(closing.map((m) => m.id));
+  const upcoming = upcomingOpenMatches(now, 2, activeRound).filter((m) => !closingIds.has(m.id));
 
   if (closing.length === 0 && upcoming.length === 0) return null;
 
@@ -23,7 +31,7 @@ export default function ClosingSoonBanner({ nowIso }: { nowIso?: string }) {
         <div className="closing-soon-urgent">
           <strong>Матчі скоро закриваються</strong>
           <span className="muted small">
-            Вибір рахунку закривається за 1 годину до початку матчу
+            Вибір рахунку закривається за 1 годину до початку (час Торонто)
           </span>
           <div className="closing-soon-list">
             {closing.slice(0, 2).map((m) => (
@@ -34,7 +42,7 @@ export default function ClosingSoonBanner({ nowIso }: { nowIso?: string }) {
       )}
       {upcoming.length > 0 && (
         <div className="closing-soon-next">
-          <strong>Наступні матчі для піків</strong>
+          <strong>Наступні матчі для піків · {ROUND_LABELS[activeRound]}</strong>
           <div className="closing-soon-list">
             {upcoming.map((m) => (
               <ClosingMatchChip key={m.id} match={m} now={now} />

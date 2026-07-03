@@ -1,13 +1,14 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Countdown from '@/components/Countdown';
 import ClosingSoonBanner from '@/components/ClosingSoonBanner';
 import MatchPickCountdown from '@/components/MatchPickCountdown';
 import MatchComments from '@/components/MatchComments';
 import { getPool, postJSON, type PoolResponse } from '@/lib/clientApi';
 import { getCachedPool } from '@/lib/usePool';
-import { resolvePickTeams, isR16RepickOpen, resultsFromMatches } from '@/lib/bracket';
+import { resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
+import { canPickMatch, getActiveKoPickRound } from '@/lib/roundPick';
 import { computeTotalGoals } from '@/lib/tiebreaker';
 import { gradeGroupMatch, gradeKoMatch } from '@/lib/scoring';
 import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS, TEAMS } from '@/lib/tournament';
@@ -55,6 +56,7 @@ export default function PicksPage() {
   const [pageTab, setPageTab] = useState<PageTab>('r32');
   // True until we've checked the session cookie, so we don't flash the login card.
   const [idChecking, setIdChecking] = useState(true);
+  const lastLockToastAt = useRef(0);
 
   useEffect(() => {
     try {
@@ -62,6 +64,18 @@ export default function PicksPage() {
       if (saved && (PAGE_TABS as string[]).includes(saved)) setPageTab(saved as PageTab);
     } catch {}
   }, []);
+
+  function flash(msg: string, kind: 'ok' | 'err') {
+    setToast({ msg, kind });
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  function flashLock(msg: string) {
+    const t = Date.now();
+    if (t - lastLockToastAt.current < 3000) return;
+    lastLockToastAt.current = t;
+    flash(msg, 'err');
+  }
 
   function switchTab(next: PageTab) {
     setPageTab(next);
@@ -98,11 +112,6 @@ export default function PicksPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pool]);
-
-  function flash(msg: string, kind: 'ok' | 'err') {
-    setToast({ msg, kind });
-    setTimeout(() => setToast(null), 3000);
-  }
 
   function loadAndEnter(rawName: string) {
     const existing = pool?.participants.find(
@@ -145,15 +154,25 @@ export default function PicksPage() {
     () => (pool ? resultsFromMatches(pool.matches) : {}),
     [pool],
   );
+  const activeKoRound = pool ? getActiveKoPickRound(pool.settings) : 'r32';
+  const adminLocked = pool?.settings.status === 'locked';
   const resolved = useMemo(() => {
     const map: Record<string, { home: string | null; away: string | null } | null> = {};
     if (!bracket) return map;
-    for (const m of KO_MATCH_IDS) map[m.id] = resolvePickTeams(m.id, koPicks, bracket, koResultsMap);
+    for (const m of KO_MATCH_IDS) {
+      map[m.id] = resolveRealKoTeams(m.id, koResultsMap, bracket);
+    }
     return map;
-  }, [koPicks, bracket, koResultsMap]);
-  const r16RepickOpen = isR16RepickOpen(koResultsMap);
+  }, [bracket, koResultsMap]);
 
   function setScore(id: string, side: 'h' | 'a', val: string) {
+    if (!pool || adminLocked) return;
+    if (!canPickMatch(id, pool.settings, pool.koBracket, koResultsMap)) {
+      if (isMatchPickLocked(id)) {
+        flashLock('Цей матч закрито — менше години до початку (час Торонто).');
+      }
+      return;
+    }
     setKoPicks((prev) => {
       const cur = { ...(prev[id] || { h: NaN, a: NaN }) } as any;
       cur[side] = val === '' ? NaN : Math.max(0, parseInt(val, 10));
@@ -168,6 +187,11 @@ export default function PicksPage() {
   }
 
   function setEt(id: string, team: string) {
+    if (!pool || adminLocked) return;
+    if (!canPickMatch(id, pool.settings, pool.koBracket, koResultsMap)) {
+      if (isMatchPickLocked(id)) flashLock('Цей матч закрито — менше години до початку (час Торонто).');
+      return;
+    }
     setKoPicks((prev) => ({ ...prev, [id]: { ...(prev[id] as any), et: team } }));
   }
 
@@ -197,7 +221,7 @@ export default function PicksPage() {
     if (Object.keys(clean).length === 0) {
       return flash('Fill in at least one open match first.', 'err');
     }
-    await persist(clean, 'Bracket submitted. You can edit until the deadline.');
+    await persist(clean, 'Збережено. Можна змінювати скільки завгодно — до закриття матчу.');
   }
 
   async function clearAll() {
@@ -316,7 +340,9 @@ export default function PicksPage() {
         <Countdown deadline={pool.settings.picksDeadline} />
       </section>
 
-      {identified && bracketOpen && <ClosingSoonBanner nowIso={pool.now} />}
+      {identified && bracketOpen && (
+        <ClosingSoonBanner nowIso={pool.now} activeRound={activeKoRound} />
+      )}
 
       {!identified ? (
         idChecking ? (
@@ -345,10 +371,11 @@ export default function PicksPage() {
               <button
                 key={tab}
                 type="button"
-                className={`page-tab${pageTab === tab ? ' active' : ''}`}
+                className={`page-tab${pageTab === tab ? ' active' : ''}${tab !== 'group' && tab !== activeKoRound ? ' round-closed' : ''}`}
                 onClick={() => switchTab(tab)}
               >
                 {TAB_LABELS[tab]}
+                {tab === activeKoRound && tab !== 'group' && <span className="page-tab-live">live</span>}
               </button>
             ))}
           </div>
@@ -364,7 +391,7 @@ export default function PicksPage() {
 
           {pageTab === 'group' ? (
             <GroupPicksView matches={groupMatches} picks={myGroupPicks} />
-          ) : !bracketOpen && !pool.locked ? (
+          ) : !bracketOpen && !adminLocked ? (
             <div className="card">
               <strong>The knockout bracket is not open yet.</strong>
               <p className="muted small" style={{ marginTop: 6 }}>
@@ -374,22 +401,27 @@ export default function PicksPage() {
             </div>
           ) : (
             <>
-              {pool.locked && (
+              {adminLocked && (
                 <div className="card">
-                  <strong>Knockout picks are locked.</strong>
+                  <strong>Піки заблоковано адміном.</strong>
+                </div>
+              )}
+
+              {pageTab !== activeKoRound && pageTab !== 'bracket' && !adminLocked && (
+                <div className="card muted">
+                  <strong>{TAB_LABELS[pageTab]} — тільки перегляд</strong>
                   <p className="muted small" style={{ marginTop: 6 }}>
-                    The deadline has passed — your picks are final. Results and points appear here as
-                    matches are played.
+                    Зараз можна пікати лише <strong>{ROUND_LABELS[activeKoRound]}</strong>. Цей раунд відкриється пізніше.
                   </p>
                 </div>
               )}
 
-              {r16RepickOpen && pageTab === 'r16' && !pool.locked && (
+              {pageTab === activeKoRound && !adminLocked && (
                 <div className="card repick-banner">
-                  <strong>Раунд 16 відкрито для нових піків</strong>
+                  <strong>Активний раунд: {ROUND_LABELS[activeKoRound]}</strong>
                   <p className="muted small" style={{ marginTop: 6 }}>
-                    Усі матчі 1/16 фіналу завершені — тепер ви бачите реальні пари команд. Оновіть свої
-                    прогнози до закриття кожного матчу (за 1 годину до початку).
+                    Обирайте рахунки лише для цього раунду. Кожен матч закривається за 1 годину до початку (час Торонто).
+                    Змінюйте скільки завгодно — поки не закриється.
                   </p>
                 </div>
               )}
@@ -404,12 +436,15 @@ export default function PicksPage() {
                   setScore={setScore}
                   setEt={setEt}
                   results={koResults}
-                  readOnly={pool.locked}
+                  activeRound={activeKoRound}
+                  adminLocked={adminLocked}
+                  pool={pool}
+                  koResultsMap={koResultsMap}
                   identified={identified}
                 />
               )}
 
-              {!pool.locked && currentRoundComplete && nextTab && (
+              {!adminLocked && currentRoundComplete && nextTab && pageTab === activeKoRound && (
                 <div className="next-stage-bar">
                   <span>All {TAB_LABELS[pageTab]} matches picked.</span>
                   <button className="btn btn-secondary btn-sm" onClick={() => switchTab(nextTab)}>
@@ -431,7 +466,7 @@ export default function PicksPage() {
                     className="team-select-flag champion-select"
                     value={champion}
                     onChange={(e) => saveChampion(e.target.value)}
-                    disabled={saving || pool.locked}
+                    disabled={saving || adminLocked || pageTab !== activeKoRound}
                   >
                     <option value="">— Select champion —</option>
                     {[...TEAMS].sort((a, b) => a.localeCompare(b)).map((t) => (
@@ -453,7 +488,7 @@ export default function PicksPage() {
                 <span className="tiebreaker-value">{autoTotalGoals}</span>
               </div>
 
-              {!pool.locked && (
+              {!adminLocked && pageTab === activeKoRound && (
                 <div className="row sticky-submit">
                   <button className="btn btn-primary" onClick={submit} disabled={saving}>
                     {saving ? 'Saving...' : 'Submit / update picks'}
@@ -761,7 +796,10 @@ function RoundView({
   setScore,
   setEt,
   results,
-  readOnly,
+  activeRound,
+  adminLocked,
+  pool,
+  koResultsMap,
   identified,
 }: {
   round: Round;
@@ -770,10 +808,14 @@ function RoundView({
   setScore: (id: string, side: 'h' | 'a', v: string) => void;
   setEt: (id: string, team: string) => void;
   results: Record<string, MatchResult>;
-  readOnly: boolean;
+  activeRound: Round;
+  adminLocked: boolean;
+  pool: PoolResponse;
+  koResultsMap: Record<string, MatchResult | undefined>;
   identified: boolean;
 }) {
   const matches = useMemo(() => KO_MATCH_IDS.filter((m) => m.round === round), [round]);
+  const roundIsActive = round === activeRound && !adminLocked;
   const ready = matches.filter((m) => {
     const t = resolved[m.id];
     return t?.home && t?.away;
@@ -810,7 +852,7 @@ function RoundView({
                 setScore={setScore}
                 setEt={setEt}
                 result={results[match.id]}
-                readOnly={readOnly}
+                pickable={roundIsActive && canPickMatch(match.id, pool.settings, pool.koBracket, koResultsMap)}
                 identified={identified}
               />
             ))}
@@ -828,7 +870,7 @@ function ListMatchCard({
   setScore,
   setEt,
   result,
-  readOnly,
+  pickable,
   identified,
 }: {
   match: { id: string; round: Round; label: string };
@@ -837,14 +879,14 @@ function ListMatchCard({
   setScore: (id: string, side: 'h' | 'a', v: string) => void;
   setEt: (id: string, team: string) => void;
   result?: MatchResult;
-  readOnly?: boolean;
+  pickable?: boolean;
   identified?: boolean;
 }) {
   const home = teams?.home;
   const away = teams?.away;
   const ready = !!home && !!away;
   const matchLocked = isMatchPickLocked(match.id);
-  const locked = readOnly || !ready || matchLocked;
+  const locked = !pickable || !ready;
   const isDraw = pick && Number.isInteger(pick.h) && Number.isInteger(pick.a) && pick.h === pick.a;
   const meta = KO_META[match.id];
   const graded =
@@ -883,8 +925,8 @@ function ListMatchCard({
         </span>
       </div>
       {!ready && <div className="ko-not-ready">Complete feeder matches first</div>}
-      {ready && matchLocked && !readOnly && (
-        <div className="ko-not-ready urgent">Цей матч закрито — вибір рахунку закрився за годину до початку</div>
+      {ready && matchLocked && (
+        <div className="ko-not-ready urgent">Цей матч закрито — менше години до початку (час Торонто)</div>
       )}
       {ready && isDraw && (
         <div className="et-row">

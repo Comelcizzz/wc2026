@@ -1,5 +1,9 @@
 import { KO_KICKOFF, KO_MATCH_IDS, KO_META, PICK_LOCK_HOURS_BEFORE } from './tournament';
+import { publicConfig } from './publicConfig';
 import type { Round } from './types';
+
+/** All kickoffs and pick-close times use America/Toronto (see KO_KICKOFF). */
+export const PICK_TIMEZONE = publicConfig.timezone;
 
 const LOCK_MS = PICK_LOCK_HOURS_BEFORE * 60 * 60 * 1000;
 
@@ -45,10 +49,15 @@ export interface UpcomingMatch {
   closeMs: number;
 }
 
-/** Next N matches whose pick window is still open, sorted by close time. */
-export function upcomingOpenMatches(now = Date.now(), limit = 3): UpcomingMatch[] {
+/** Next N open matches in the active round only, sorted by close time. */
+export function upcomingOpenMatches(
+  now = Date.now(),
+  limit = 3,
+  activeRound?: Round,
+): UpcomingMatch[] {
   const out: UpcomingMatch[] = [];
   for (const m of KO_MATCH_IDS) {
+    if (activeRound && m.round !== activeRound) continue;
     const closeMs = msUntilPickClose(m.id, now);
     if (closeMs == null || closeMs <= 0) continue;
     const meta = KO_META[m.id];
@@ -64,7 +73,16 @@ export function upcomingOpenMatches(now = Date.now(), limit = 3): UpcomingMatch[
   return out.slice(0, limit);
 }
 
-/** Matches closing within the next hour (pick window ending soon). */
-export function matchesClosingSoon(now = Date.now(), withinMs = 60 * 60 * 1000): UpcomingMatch[] {
-  return upcomingOpenMatches(now, 32).filter((m) => m.closeMs <= withinMs);
+/** Matches closing within the next hour (pick window ending soon), active round only. */
+export function matchesClosingSoon(
+  now = Date.now(),
+  withinMs = 60 * 60 * 1000,
+  activeRound?: Round,
+): UpcomingMatch[] {
+  const closingIds = new Set(
+    upcomingOpenMatches(now, 32, activeRound)
+      .filter((m) => m.closeMs <= withinMs)
+      .map((m) => m.id),
+  );
+  return upcomingOpenMatches(now, 32, activeRound).filter((m) => closingIds.has(m.id));
 }
