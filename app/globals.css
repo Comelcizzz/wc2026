@@ -1145,6 +1145,10 @@ label.lbl {
   color: var(--text);
 }
 .round-tab.active .round-tab-badge { background: rgba(5, 12, 20, .5); }
+.round-tab-badge.fixtures {
+  background: rgba(25, 195, 125, .15);
+  color: var(--green);
+}
 
 .console-subhead {
   font-size: 12px;
