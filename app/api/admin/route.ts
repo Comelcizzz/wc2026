@@ -222,6 +222,16 @@ export async function POST(req: NextRequest) {
         pool.settings.status = body.status === 'locked' ? 'locked' : 'open';
         break;
 
+      case 'setKoPickRound': {
+        const round = String(body.round || '');
+        const valid = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
+        if (!valid.includes(round)) {
+          return NextResponse.json({ ok: false, error: 'Invalid round.' }, { status: 400 });
+        }
+        pool.settings.koPickRound = round as typeof pool.settings.koPickRound;
+        break;
+      }
+
       case 'setPaid': {
         const p = pool.participants.find((x) => x.id === String(body.participantId));
         if (p) p.paid = !!body.paid;

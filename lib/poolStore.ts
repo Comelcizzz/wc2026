@@ -71,6 +71,7 @@ function normalize(data: PoolData): PoolData {
     data.settings.picksDeadline = config.defaultDeadline;
   }
   if (!data.settings.status) data.settings.status = 'open';
+  if (!data.settings.koPickRound) data.settings.koPickRound = 'r32';
 
   // Tiebreaker is always derived from saved picks (group + knockout), never the
   // stale manual guess. Recompute for every participant on every read so the

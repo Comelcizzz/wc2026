@@ -1,5 +1,5 @@
 import { POINTS } from './tournament';
-import { resolvePickTeams, predictedWinnerOf, type SideTeams } from './bracket';
+import { resolveRealKoTeams, predictedWinnerOf, type SideTeams } from './bracket';
 import { computeTotalGoals } from './tiebreaker';
 import type { PoolData, ScoredParticipant, Round, ScorePick, MatchResult } from './types';
 
@@ -101,7 +101,7 @@ export function calcScores(pool: PoolData): ScoredParticipant[] {
     const results = Object.fromEntries(pool.matches.map((m) => [m.id, m.result]));
     for (const m of pool.matches) {
       if (m.round === 'group') continue;
-      const myTeams = resolvePickTeams(m.id, koPicks, pool.koBracket, results);
+      const myTeams = resolveRealKoTeams(m.id, results, pool.koBracket);
       const grade = gradeKoMatch(m.round, koPicks[m.id], myTeams, m.result);
       koPoints += grade.points;
       if (grade.status === 'exact') exactCount++;

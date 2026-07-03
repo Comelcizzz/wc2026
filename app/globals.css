@@ -1370,6 +1370,15 @@ label.lbl {
   padding: 10px 14px;
   font-size: 14px;
 }
+.page-tab.round-closed { opacity: .55; }
+.page-tab-live {
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--green);
+  letter-spacing: .06em;
+}
 
 /* ── Group-stage read-only picks ── */
 .group-block-head {
