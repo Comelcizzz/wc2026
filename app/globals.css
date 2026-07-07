@@ -2417,8 +2417,42 @@ label.lbl {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 2px;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(25, 195, 125, .22);
+  background: rgba(25, 195, 125, .06);
+}
+.all-picks-et-label {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.et-winner-badge.view-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--green);
+  background: rgba(25, 195, 125, .18);
+  color: #9df5cf;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: none;
+}
+.et-winner-badge.view-only.missing {
+  border-color: var(--line-strong);
+  background: rgba(5, 12, 20, .55);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 .score-input.view-only,
 .score-input.view-only:disabled {
@@ -2455,26 +2489,6 @@ label.lbl {
 .score-display.view-only:not(.filled) {
   color: var(--muted);
 }
-.et-pill.view-only {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line-strong);
-  background: rgba(5, 12, 20, .55);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  user-select: none;
-  pointer-events: none;
-}
-.et-pill.view-only.sel {
-  border-color: var(--green);
-  color: #9df5cf;
-  background: rgba(25, 195, 125, .12);
-}
-.et-pill.view-only:not(.sel) { opacity: .45; }
 .score-input.view-only:not(.filled) {
   color: var(--muted);
 }
