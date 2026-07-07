@@ -1,5 +1,5 @@
 import { POINTS } from './tournament';
-import { resolveRealKoTeams, predictedWinnerOf, type SideTeams } from './bracket';
+import { predictedWinnerOf } from './bracket';
 import { computeTotalGoals } from './tiebreaker';
 import type { PoolData, ScoredParticipant, Round, ScorePick, MatchResult } from './types';
 
@@ -14,9 +14,11 @@ import type { PoolData, ScoredParticipant, Round, ScorePick, MatchResult } from 
 // standings calculation and the player-facing results view on the picks page
 // so the scoring rules live in exactly one place.
 export type GradeStatus = 'pending' | 'nopick' | 'exact' | 'correct' | 'miss';
+export type KoMissReason = 'wrong_winner';
 export interface MatchGrade {
   status: GradeStatus;
   points: number;
+  missReason?: KoMissReason;
 }
 
 // ── Group-stage grading (outcome +1, exact +3) ──
@@ -33,16 +35,12 @@ export function gradeGroupMatch(
   return { status: 'correct', points: 1 };
 }
 
-// ── Knockout grading — OFFICIAL-MATCHUP-GATED ──
-// A player scores a KO slot only if the matchup they predicted for it
-// (resolved from their own picks) equals the official matchup the admin
-// entered. If their bracket sent different teams into this slot, they get 0
-// here — but later-round picks can still hit if their bracket re-converges
-// with reality. R32 always matches (shared fixtures); gating bites from R16 on.
+// ── Knockout grading — official admin matchups only ──
+// Players enter scores for the admin-confirmed home/away teams in each slot.
+// pick.h / pick.a are always relative to that official pairing (as on My Picks).
 export function gradeKoMatch(
   round: Round,
   pick: ScorePick | undefined,
-  myTeams: SideTeams | null,
   res: MatchResult | undefined,
 ): MatchGrade {
   if (!res || !res.winner || res.homeGoals == null || res.awayGoals == null) {
@@ -53,29 +51,25 @@ export function gradeKoMatch(
   if (!offHome || !offAway) return { status: 'pending', points: 0 };
 
   if (!pick || pick.h == null || pick.a == null) return { status: 'nopick', points: 0 };
-  if (!myTeams || !myTeams.home || !myTeams.away) return { status: 'miss', points: 0 };
 
-  // GATE: predicted matchup must equal the official one (order-agnostic).
-  const sameMatchup =
-    (myTeams.home === offHome && myTeams.away === offAway) ||
-    (myTeams.home === offAway && myTeams.away === offHome);
-  if (!sameMatchup) return { status: 'miss', points: 0 };
-
-  // Winner must match (ET/pens winner on a predicted draw).
   const predicted =
-    pick.h === pick.a ? pick.et || null : pick.h > pick.a ? myTeams.home : myTeams.away;
-  if (!predicted || predicted !== res.winner) return { status: 'miss', points: 0 };
+    pick.h === pick.a ? pick.et || null : pick.h > pick.a ? offHome : offAway;
+  if (!predicted || predicted !== res.winner) {
+    return { status: 'miss', points: 0, missReason: 'wrong_winner' };
+  }
 
   const def = POINTS[round as Exclude<Round, 'group'>];
   if (!def) return { status: 'miss', points: 0 };
 
-  // Exact score, oriented by team (matchup already matches the official one).
-  const myForOffHome = myTeams.home === offHome ? pick.h : pick.a;
-  const myForOffAway = myTeams.home === offHome ? pick.a : pick.h;
-  if (myForOffHome === res.homeGoals && myForOffAway === res.awayGoals) {
+  if (pick.h === res.homeGoals && pick.a === res.awayGoals) {
     return { status: 'exact', points: def.exact };
   }
   return { status: 'correct', points: def.outcome };
+}
+
+export function koMissLabel(reason: KoMissReason | undefined): string {
+  if (reason === 'wrong_winner') return 'Wrong winner';
+  return 'Miss';
 }
 export function calcScores(pool: PoolData): ScoredParticipant[] {
   const settings = pool.settings || ({} as PoolData['settings']);
@@ -101,16 +95,15 @@ export function calcScores(pool: PoolData): ScoredParticipant[] {
     const results = Object.fromEntries(pool.matches.map((m) => [m.id, m.result]));
     for (const m of pool.matches) {
       if (m.round === 'group') continue;
-      const myTeams = resolveRealKoTeams(m.id, results, pool.koBracket);
-      const grade = gradeKoMatch(m.round, koPicks[m.id], myTeams, m.result);
+      const grade = gradeKoMatch(m.round, koPicks[m.id], m.result);
       koPoints += grade.points;
       if (grade.status === 'exact') exactCount++;
     }
 
     // ── Champion bonus (+10). Uses the player's explicit champion pick,
-    // falling back to the bracket FINAL winner if they never chose one. ──
+    // falling back to the FINAL winner from their official-matchup pick. ──
     let championCorrect = false;
-    const champ = p.champion || predictedWinnerOf('FINAL', koPicks, pool.koBracket) || '';
+    const champ = p.champion || predictedWinnerOf('FINAL', koPicks, results, pool.koBracket) || '';
     if (actualChampion && champ === actualChampion) {
       koPoints += 10;
       championCorrect = true;
