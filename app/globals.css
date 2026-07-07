@@ -2417,8 +2417,42 @@ label.lbl {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 2px;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(25, 195, 125, .22);
+  background: rgba(25, 195, 125, .06);
+}
+.all-picks-et-label {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.et-winner-badge.view-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--green);
+  background: rgba(25, 195, 125, .18);
+  color: #9df5cf;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: none;
+}
+.et-winner-badge.view-only.missing {
+  border-color: var(--line-strong);
+  background: rgba(5, 12, 20, .55);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 .score-input.view-only,
 .score-input.view-only:disabled {
@@ -2428,6 +2462,32 @@ label.lbl {
   user-select: none;
   -webkit-user-select: none;
   color: var(--ink);
+}
+.score-display.view-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  min-height: 42px;
+  background: rgba(5, 12, 20, .78);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+  cursor: default;
+}
+.score-display.view-only.filled {
+  border-color: var(--green);
+  background: rgba(25, 195, 125, .08);
+  color: var(--ink);
+}
+.score-display.view-only:not(.filled) {
+  color: var(--muted);
 }
 .score-input.view-only:not(.filled) {
   color: var(--muted);
@@ -2442,6 +2502,26 @@ label.lbl {
 .et-btn.view-only:not(.sel) {
   opacity: .45;
 }
+.match-all-picks-link {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--green);
+  white-space: nowrap;
+}
+.match-all-picks-link:hover { color: #9df5cf; }
+.gp-all-picks-link {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--green);
+  white-space: nowrap;
+  justify-self: end;
+}
+.gp-all-picks-link:hover { color: #9df5cf; }
 .all-picks-detail-head {
   display: flex;
   align-items: flex-start;
