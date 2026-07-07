@@ -1,4 +1,5 @@
 import { config } from './config';
+import { resolveRealKoTeams, resultsFromMatches } from './bracket';
 import { ALL_MATCHES } from './tournament';
 import { computeTotalGoals } from './tiebreaker';
 import type { PoolData } from './types';
@@ -80,5 +81,27 @@ function normalize(data: PoolData): PoolData {
       p.totalGoals = computeTotalGoals(p.picks, p.koPicks);
     }
   }
+
+  enrichMatchResults(data);
   return data;
+}
+
+function enrichMatchResults(data: PoolData) {
+  const results = resultsFromMatches(data.matches);
+  for (const m of data.matches) {
+    if (!m.result || m.result.homeGoals == null || m.result.awayGoals == null) continue;
+    if (m.round === 'group') {
+      if (m.home) m.result.home = m.home;
+      if (m.away) m.result.away = m.away;
+      continue;
+    }
+    const official = resolveRealKoTeams(m.id, results, data.koBracket);
+    if (!m.result.home && official?.home) m.result.home = official.home;
+    if (!m.result.away && official?.away) m.result.away = official.away;
+    if (!m.result.winner && m.result.home && m.result.away) {
+      const { homeGoals, awayGoals, home, away } = m.result;
+      if (homeGoals > awayGoals) m.result.winner = home;
+      else if (awayGoals > homeGoals) m.result.winner = away;
+    }
+  }
 }

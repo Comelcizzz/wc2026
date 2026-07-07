@@ -196,9 +196,19 @@ export async function POST(req: NextRequest) {
         }
         const home = String(body.home || '');
         const away = String(body.away || '');
-        const winner = String(body.winner || '');
-        if (!home || !away || !winner) {
-          return NextResponse.json({ ok: false, error: 'Home, away and winner are required.' }, { status: 400 });
+        let winner = String(body.winner || '').trim();
+        if (!home || !away) {
+          return NextResponse.json({ ok: false, error: 'Home and away are required.' }, { status: 400 });
+        }
+        if (!winner) {
+          if (hg > ag) winner = home;
+          else if (ag > hg) winner = away;
+          else {
+            return NextResponse.json(
+              { ok: false, error: 'Draw requires selecting the winner (ET / pens).' },
+              { status: 400 },
+            );
+          }
         }
         const existingResults = resultsFromMatches(pool.matches);
         const officialTeams = resolveRealKoTeams(id, existingResults, pool.koBracket);
@@ -231,7 +241,7 @@ export async function POST(req: NextRequest) {
         if (!Number.isInteger(hg) || !Number.isInteger(ag)) {
           return NextResponse.json({ ok: false, error: 'Invalid score.' }, { status: 400 });
         }
-        m.result = { homeGoals: hg, awayGoals: ag };
+        m.result = { homeGoals: hg, awayGoals: ag, home: m.home, away: m.away };
         break;
       }
 
