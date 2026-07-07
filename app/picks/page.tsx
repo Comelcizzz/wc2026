@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ClosingSoonBanner from '@/components/ClosingSoonBanner';
 import MatchPickCountdown from '@/components/MatchPickCountdown';
@@ -790,7 +791,13 @@ function GroupPicksView({ matches, picks }: { matches: Match[]; picks: GroupPick
             const playedM = m.result && m.result.homeGoals != null;
             return (
               <div className={`gp-row${grade.cls ? ` line-${grade.cls}` : ''}`} key={m.id}>
-                <span className="gp-date">{m.date}</span>
+                <span className="gp-date">
+                  {m.date}
+                  {' · '}
+                  <Link href={`/all-picks?m=${m.id}`} className="gp-all-picks-link">
+                    All picks
+                  </Link>
+                </span>
                 <span className="gp-team home">
                   <TeamFlag team={m.home} size={15} />
                   {m.home}
@@ -928,6 +935,9 @@ function ListMatchCard({
         <span>M{meta?.m ?? match.id}</span>
         <span>{meta?.date}</span>
         {ready && <MatchPickCountdown matchId={match.id} />}
+        <Link href={`/all-picks?m=${match.id}`} className="match-all-picks-link">
+          All picks
+        </Link>
       </div>
       <div className="score-row">
         <span className={`team-name${!home ? ' tbd' : ''}`}>

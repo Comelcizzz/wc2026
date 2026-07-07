@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TeamFlag from '@/components/TeamFlag';
@@ -51,54 +52,20 @@ function ReadOnlyPickRow({
         <strong>{displayName(name)}</strong>
         {gradeTxt ? <span className={`result-badge ${gradeCls}`}>{gradeTxt}</span> : null}
       </div>
-      <div className="all-picks-pick-fields">
-        <input
-          className={`score-input view-only${hasH ? ' filled' : ''}`}
-          type="text"
-          inputMode="numeric"
-          readOnly
-          disabled
-          tabIndex={-1}
-          aria-readonly="true"
-          aria-label={`${name} home goals`}
-          value={hasH ? String(pick!.h) : ''}
-          placeholder="–"
-        />
+      <div className="all-picks-pick-fields" aria-label={`${name} predicted score`}>
+        <span className={`score-display view-only${hasH ? ' filled' : ''}`}>
+          {hasH ? pick!.h : '–'}
+        </span>
         <span className="muted" style={{ fontWeight: 900 }}>:</span>
-        <input
-          className={`score-input view-only${hasA ? ' filled' : ''}`}
-          type="text"
-          inputMode="numeric"
-          readOnly
-          disabled
-          tabIndex={-1}
-          aria-readonly="true"
-          aria-label={`${name} away goals`}
-          value={hasA ? String(pick!.a) : ''}
-          placeholder="–"
-        />
+        <span className={`score-display view-only${hasA ? ' filled' : ''}`}>
+          {hasA ? pick!.a : '–'}
+        </span>
       </div>
       {isKo && isDraw && home && away && (
         <div className="all-picks-et-row">
           <span className="muted small">ET / pens</span>
-          <button
-            type="button"
-            className={`et-btn view-only${et === home ? ' sel' : ''}`}
-            disabled
-            tabIndex={-1}
-            aria-disabled="true"
-          >
-            {home}
-          </button>
-          <button
-            type="button"
-            className={`et-btn view-only${et === away ? ' sel' : ''}`}
-            disabled
-            tabIndex={-1}
-            aria-disabled="true"
-          >
-            {away}
-          </button>
+          <span className={`et-pill view-only${et === home ? ' sel' : ''}`}>{home}</span>
+          <span className={`et-pill view-only${et === away ? ' sel' : ''}`}>{away}</span>
         </div>
       )}
     </div>
@@ -351,7 +318,8 @@ function AllPicksContent() {
               <div className="all-picks-viewonly-banner">
                 <span className="pill">View only</span>
                 <span className="muted small">
-                  Score fields are disabled — nobody can change picks on this page.
+                  Not editable — to change <strong>your</strong> pick go to{' '}
+                  <Link href="/picks">My Picks</Link>.
                 </span>
               </div>
 
