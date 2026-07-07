@@ -6,7 +6,7 @@ import MatchPickCountdown from '@/components/MatchPickCountdown';
 import MatchComments from '@/components/MatchComments';
 import { getPool, postJSON, type PoolResponse } from '@/lib/clientApi';
 import { getCachedPool } from '@/lib/usePool';
-import { resolveKoTeams, resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
+import { resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { canPickMatch, getMaxOpenPickRound, isRoundAccessible } from '@/lib/roundPick';
 import { computeTotalGoals } from '@/lib/tiebreaker';
@@ -268,14 +268,7 @@ export default function PicksPage() {
   const koPtsByRound = KO_ROUNDS.map((r) => ({
     round: r,
     pts: KO_MATCH_IDS.filter((m) => m.round === r).reduce(
-      (s, m) =>
-        s +
-        gradeKoMatch(
-          r,
-          koPicks[m.id],
-          resolveKoTeams(m.id, koPicks, pool.koBracket),
-          koResults[m.id],
-        ).points,
+      (s, m) => s + gradeKoMatch(r, koPicks[m.id], koResults[m.id]).points,
       0,
     ),
   }));
@@ -889,7 +882,6 @@ function RoundView({
                 key={match.id}
                 match={match}
                 teams={resolved[match.id]}
-                gradeTeams={resolveKoTeams(match.id, koPicks, pool.koBracket)}
                 pick={koPicks[match.id]}
                 setScore={setScore}
                 setEt={setEt}
@@ -909,7 +901,6 @@ function RoundView({
 function ListMatchCard({
   match,
   teams,
-  gradeTeams,
   pick,
   setScore,
   setEt,
@@ -920,7 +911,6 @@ function ListMatchCard({
 }: {
   match: { id: string; round: Round; label: string };
   teams: { home: string | null; away: string | null } | null;
-  gradeTeams: { home: string | null; away: string | null } | null;
   pick: KoPicks[string];
   setScore: (id: string, side: 'h' | 'a', v: string) => void;
   setEt: (id: string, team: string) => void;
@@ -936,8 +926,7 @@ function ListMatchCard({
   const locked = !pickable || !ready;
   const isDraw = pick && Number.isInteger(pick.h) && Number.isInteger(pick.a) && pick.h === pick.a;
   const meta = KO_META[match.id];
-  const grade =
-    result && result.winner ? gradeKoMatch(match.round, pick, gradeTeams ?? null, result) : null;
+  const grade = result && result.winner ? gradeKoMatch(match.round, pick, result) : null;
   const graded =
     grade && (grade.status === 'exact' || grade.status === 'correct' || grade.status === 'miss')
       ? gradeChrome(grade).cls
@@ -992,7 +981,7 @@ function ListMatchCard({
           </div>
         </div>
       )}
-      <KoResultStrip match={match} gradeTeams={gradeTeams} pick={pick} result={result} />
+      <KoResultStrip match={match} pick={pick} result={result} />
       <MatchComments matchId={match.id} identified={!!identified} initialCount={commentCount || 0} />
     </div>
   );
@@ -1002,17 +991,15 @@ function ListMatchCard({
 // match: the real teams + score, plus how the player did and the points earned.
 function KoResultStrip({
   match,
-  gradeTeams,
   pick,
   result,
 }: {
   match: { id: string; round: Round };
-  gradeTeams: { home: string | null; away: string | null } | null;
   pick: KoPicks[string];
   result?: MatchResult;
 }) {
   if (!result || !result.winner || result.homeGoals == null || result.awayGoals == null) return null;
-  const grade = gradeKoMatch(match.round, pick, gradeTeams ?? null, result);
+  const grade = gradeKoMatch(match.round, pick, result);
   const { cls, txt } = gradeChrome(grade);
   return (
     <div className={`ko-result${cls ? ` line-${cls}` : ''}`}>
