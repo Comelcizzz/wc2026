@@ -90,11 +90,17 @@ export function resultsFromMatches(matches: Match[]): Record<string, MatchResult
   return Object.fromEntries(matches.map((m) => [m.id, m.result]));
 }
 
-// The team the participant has advancing OUT of a given KO match (their predicted winner).
-export function predictedWinnerOf(matchId: string, picks: KoPicks, bracket: KoBracket): string | null {
+// The team the participant has advancing OUT of a given KO match, using the
+// admin-confirmed teams shown when they entered their pick.
+export function predictedWinnerOf(
+  matchId: string,
+  picks: KoPicks,
+  results: Record<string, MatchResult | undefined>,
+  bracket: KoBracket,
+): string | null {
   const pick = picks[matchId];
   if (!pick || pick.h == null || pick.a == null) return null;
-  const teams = resolveKoTeams(matchId, picks, bracket);
+  const teams = resolveRealKoTeams(matchId, results, bracket);
   if (!teams || !teams.home || !teams.away) return null;
   if (pick.h === pick.a) return pick.et || null;
   return pick.h > pick.a ? teams.home : teams.away;
