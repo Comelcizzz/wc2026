@@ -10,7 +10,7 @@ import { resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { canPickMatch, getMaxOpenPickRound, isRoundAccessible } from '@/lib/roundPick';
 import { computeTotalGoals } from '@/lib/tiebreaker';
-import { gradeGroupMatch, gradeKoMatch } from '@/lib/scoring';
+import { gradeGroupMatch, gradeKoMatch, koMissLabel } from '@/lib/scoring';
 import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS } from '@/lib/tournament';
 import TeamFlag from '@/components/TeamFlag';
 import { groupTable } from '@/lib/groupStandings';
@@ -268,7 +268,7 @@ export default function PicksPage() {
   const koPtsByRound = KO_ROUNDS.map((r) => ({
     round: r,
     pts: KO_MATCH_IDS.filter((m) => m.round === r).reduce(
-      (s, m) => s + gradeKoMatch(r, koPicks[m.id], resolved[m.id] || null, koResults[m.id]).points,
+      (s, m) => s + gradeKoMatch(r, koPicks[m.id], koResults[m.id]).points,
       0,
     ),
   }));
@@ -631,11 +631,11 @@ function hasCompleteKoPick(pick: KoPicks[string] | undefined): boolean {
 }
 
 // Maps a shared grade status to the existing result CSS suffix + label.
-function gradeChrome(status: ReturnType<typeof gradeKoMatch>['status'], points: number) {
-  if (status === 'exact') return { cls: 'exact', txt: `Exact +${points}` };
-  if (status === 'correct') return { cls: 'correct', txt: `Outcome +${points}` };
-  if (status === 'miss') return { cls: 'wrong', txt: 'Miss' };
-  if (status === 'nopick') return { cls: '', txt: 'No pick' };
+function gradeChrome(grade: ReturnType<typeof gradeKoMatch>) {
+  if (grade.status === 'exact') return { cls: 'exact', txt: `Exact +${grade.points}` };
+  if (grade.status === 'correct') return { cls: 'correct', txt: `Outcome +${grade.points}` };
+  if (grade.status === 'miss') return { cls: 'wrong', txt: koMissLabel(grade.missReason) };
+  if (grade.status === 'nopick') return { cls: '', txt: 'No pick' };
   return { cls: '', txt: '' };
 }
 
@@ -926,8 +926,11 @@ function ListMatchCard({
   const locked = !pickable || !ready;
   const isDraw = pick && Number.isInteger(pick.h) && Number.isInteger(pick.a) && pick.h === pick.a;
   const meta = KO_META[match.id];
+  const grade = result && result.winner ? gradeKoMatch(match.round, pick, result) : null;
   const graded =
-    result && result.winner ? gradeChrome(gradeKoMatch(match.round, pick, teams ?? null, result).status, 0).cls : '';
+    grade && (grade.status === 'exact' || grade.status === 'correct' || grade.status === 'miss')
+      ? gradeChrome(grade).cls
+      : '';
 
   return (
     <div className={`match-card${!ready ? ' locked' : ''}${matchLocked ? ' match-pick-closed' : ''}${graded ? ` graded-${graded}` : ''}`}>
@@ -978,7 +981,7 @@ function ListMatchCard({
           </div>
         </div>
       )}
-      <KoResultStrip match={match} teams={teams} pick={pick} result={result} />
+      <KoResultStrip match={match} pick={pick} result={result} />
       <MatchComments matchId={match.id} identified={!!identified} initialCount={commentCount || 0} />
     </div>
   );
@@ -988,18 +991,16 @@ function ListMatchCard({
 // match: the real teams + score, plus how the player did and the points earned.
 function KoResultStrip({
   match,
-  teams,
   pick,
   result,
 }: {
   match: { id: string; round: Round };
-  teams: { home: string | null; away: string | null } | null;
   pick: KoPicks[string];
   result?: MatchResult;
 }) {
   if (!result || !result.winner || result.homeGoals == null || result.awayGoals == null) return null;
-  const grade = gradeKoMatch(match.round, pick, teams ?? null, result);
-  const { cls, txt } = gradeChrome(grade.status, grade.points);
+  const grade = gradeKoMatch(match.round, pick, result);
+  const { cls, txt } = gradeChrome(grade);
   return (
     <div className={`ko-result${cls ? ` line-${cls}` : ''}`}>
       <span className="ko-result-score">
