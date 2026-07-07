@@ -14,10 +14,6 @@ type PageTab = 'group' | Round;
 
 const PAGE_TABS: PageTab[] = ['group', ...KO_ROUNDS];
 
-function isKoTab(tab: PageTab): tab is Round {
-  return tab !== 'group';
-}
-
 function gradeLabel(status: GradeStatus, points: number): { cls: string; txt: string } {
   if (status === 'exact') return { cls: 'exact', txt: `Exact +${points}` };
   if (status === 'correct') return { cls: 'correct', txt: points > 0 ? `+${points}` : 'Correct' };
@@ -26,11 +22,87 @@ function gradeLabel(status: GradeStatus, points: number): { cls: string; txt: st
   return { cls: '', txt: '' };
 }
 
-function formatPick(pick: ScorePick | { h: number; a: number } | undefined): string {
-  if (!pick || pick.h == null || pick.a == null) return '– : –';
-  const base = `${pick.h} : ${pick.a}`;
-  if ('et' in pick && pick.et) return `${base} (${pick.et})`;
-  return base;
+
+function ReadOnlyPickRow({
+  name,
+  pick,
+  gradeCls,
+  gradeTxt,
+  isKo,
+  home,
+  away,
+}: {
+  name: string;
+  pick: ScorePick | { h: number; a: number } | undefined;
+  gradeCls: string;
+  gradeTxt: string;
+  isKo: boolean;
+  home?: string | null;
+  away?: string | null;
+}) {
+  const hasH = pick && Number.isInteger(pick.h);
+  const hasA = pick && Number.isInteger(pick.a);
+  const isDraw = hasH && hasA && pick!.h === pick!.a;
+  const et = pick && 'et' in pick ? pick.et : undefined;
+
+  return (
+    <div className={`all-picks-pick-row${gradeCls ? ` line-${gradeCls}` : ''}`}>
+      <div className="all-picks-pick-player">
+        <strong>{displayName(name)}</strong>
+        {gradeTxt ? <span className={`result-badge ${gradeCls}`}>{gradeTxt}</span> : null}
+      </div>
+      <div className="all-picks-pick-fields">
+        <input
+          className={`score-input view-only${hasH ? ' filled' : ''}`}
+          type="text"
+          inputMode="numeric"
+          readOnly
+          disabled
+          tabIndex={-1}
+          aria-readonly="true"
+          aria-label={`${name} home goals`}
+          value={hasH ? String(pick!.h) : ''}
+          placeholder="–"
+        />
+        <span className="muted" style={{ fontWeight: 900 }}>:</span>
+        <input
+          className={`score-input view-only${hasA ? ' filled' : ''}`}
+          type="text"
+          inputMode="numeric"
+          readOnly
+          disabled
+          tabIndex={-1}
+          aria-readonly="true"
+          aria-label={`${name} away goals`}
+          value={hasA ? String(pick!.a) : ''}
+          placeholder="–"
+        />
+      </div>
+      {isKo && isDraw && home && away && (
+        <div className="all-picks-et-row">
+          <span className="muted small">ET / pens</span>
+          <button
+            type="button"
+            className={`et-btn view-only${et === home ? ' sel' : ''}`}
+            disabled
+            tabIndex={-1}
+            aria-disabled="true"
+          >
+            {home}
+          </button>
+          <button
+            type="button"
+            className={`et-btn view-only${et === away ? ' sel' : ''}`}
+            disabled
+            tabIndex={-1}
+            aria-disabled="true"
+          >
+            {away}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AllPicksPage() {
@@ -147,7 +219,7 @@ function AllPicksContent() {
         <div>
           <h1 className="page-title">Everyone&apos;s Picks</h1>
           <p className="muted small" style={{ marginTop: 4 }}>
-            Tap a match to see every player&apos;s prediction.
+            View only — tap a match to see every player&apos;s prediction. Picks cannot be edited here.
           </p>
         </div>
         <button className="btn btn-ghost btn-sm" type="button" onClick={() => refresh()}>
@@ -276,53 +348,46 @@ function AllPicksContent() {
                 )}
               </div>
 
-              <div className="panel" style={{ overflow: 'hidden' }}>
-                <table className="standings-table all-picks-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Player</th>
-                      <th>Pick</th>
-                      <th className="hide-sm">Result</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedParticipants.map((p, i) => {
-                      const pick = isGroup
-                        ? p.picks[selectedMatch.id]
-                        : p.koPicks?.[selectedMatch.id];
-                      const grade = isGroup
-                        ? gradeGroupMatch(pick, matchResult)
-                        : gradeKoMatch(
-                            selectedMatch.round,
-                            pick,
-                            p.koPicks
-                              ? resolveKoTeams(selectedMatch.id, p.koPicks, pool.koBracket)
-                              : null,
-                            matchResult,
-                          );
-                      const { cls, txt } = gradeLabel(grade.status, grade.points);
-                      return (
-                        <tr key={p.id} className={cls ? `line-${cls}` : undefined}>
-                          <td>
-                            <span className="rank-badge">{i + 1}</span>
-                          </td>
-                          <td>
-                            <strong>{displayName(p.name)}</strong>
-                          </td>
-                          <td className="all-picks-score">{formatPick(pick)}</td>
-                          <td className="hide-sm">
-                            {txt ? (
-                              <span className={`result-badge ${cls}`}>{txt}</span>
-                            ) : (
-                              <span className="muted small">—</span>
-                            )}
-                          </td>
-                        </tr>
+              <div className="all-picks-viewonly-banner">
+                <span className="pill">View only</span>
+                <span className="muted small">
+                  Score fields are disabled — nobody can change picks on this page.
+                </span>
+              </div>
+
+              <div className="all-picks-readonly-list">
+                {sortedParticipants.map((p) => {
+                  const pick = isGroup
+                    ? p.picks[selectedMatch.id]
+                    : p.koPicks?.[selectedMatch.id];
+                  const myTeams =
+                    !isGroup && p.koPicks
+                      ? resolveKoTeams(selectedMatch.id, p.koPicks, pool.koBracket)
+                      : null;
+                  const grade = isGroup
+                    ? gradeGroupMatch(pick, matchResult)
+                    : gradeKoMatch(
+                        selectedMatch.round,
+                        pick,
+                        myTeams,
+                        matchResult,
                       );
-                    })}
-                  </tbody>
-                </table>
+                  const { cls, txt } = gradeLabel(grade.status, grade.points);
+                  const rowHome = isGroup ? selectedMatch.home : myTeams?.home ?? officialTeams?.home;
+                  const rowAway = isGroup ? selectedMatch.away : myTeams?.away ?? officialTeams?.away;
+                  return (
+                    <ReadOnlyPickRow
+                      key={p.id}
+                      name={p.name}
+                      pick={pick}
+                      gradeCls={cls}
+                      gradeTxt={txt}
+                      isKo={!isGroup}
+                      home={rowHome}
+                      away={rowAway}
+                    />
+                  );
+                })}
               </div>
 
               <p className="muted small" style={{ marginTop: 12 }}>

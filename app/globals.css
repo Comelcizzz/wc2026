@@ -2365,6 +2365,83 @@ label.lbl {
   text-transform: uppercase;
 }
 .all-picks-detail { padding: 18px; }
+.all-picks-viewonly-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(5, 12, 20, .45);
+}
+.all-picks-readonly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.all-picks-pick-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "player fields"
+    "et et";
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(5, 12, 20, .35);
+  border-left: 3px solid transparent;
+}
+.all-picks-pick-row.line-correct { border-left-color: var(--green); background: rgba(25, 195, 125, .05); }
+.all-picks-pick-row.line-exact { border-left-color: var(--gold); background: rgba(245, 181, 68, .07); }
+.all-picks-pick-row.line-wrong { border-left-color: var(--red); background: rgba(255, 90, 82, .04); }
+.all-picks-pick-player {
+  grid-area: player;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.all-picks-pick-fields {
+  grid-area: fields;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.all-picks-et-row {
+  grid-area: et;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+.score-input.view-only,
+.score-input.view-only:disabled {
+  opacity: 1;
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  color: var(--ink);
+}
+.score-input.view-only:not(.filled) {
+  color: var(--muted);
+}
+.et-btn.view-only,
+.et-btn.view-only:disabled {
+  opacity: 1;
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+}
+.et-btn.view-only:not(.sel) {
+  opacity: .45;
+}
 .all-picks-detail-head {
   display: flex;
   align-items: flex-start;
@@ -2392,17 +2469,16 @@ label.lbl {
   font-size: 22px;
   color: #9df5cf;
 }
-.all-picks-table tr.line-correct { background: rgba(25, 195, 125, .05); }
-.all-picks-table tr.line-exact { background: rgba(245, 181, 68, .07); }
-.all-picks-table tr.line-wrong { background: rgba(255, 90, 82, .04); }
-.all-picks-score {
-  font-size: 16px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: .02em;
-}
 @media (max-width: 860px) {
   .all-picks-layout { grid-template-columns: 1fr; }
   .all-picks-match-list { max-height: 280px; }
+  .all-picks-pick-row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "player"
+      "fields"
+      "et";
+  }
+  .all-picks-pick-fields { justify-content: flex-start; }
 }
 
