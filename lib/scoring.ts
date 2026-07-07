@@ -1,5 +1,5 @@
 import { POINTS } from './tournament';
-import { resolveRealKoTeams, predictedWinnerOf, type SideTeams } from './bracket';
+import { resolveRealKoTeams, resolveKoTeams, predictedWinnerOf, type SideTeams } from './bracket';
 import { computeTotalGoals } from './tiebreaker';
 import type { PoolData, ScoredParticipant, Round, ScorePick, MatchResult } from './types';
 
@@ -14,9 +14,11 @@ import type { PoolData, ScoredParticipant, Round, ScorePick, MatchResult } from 
 // standings calculation and the player-facing results view on the picks page
 // so the scoring rules live in exactly one place.
 export type GradeStatus = 'pending' | 'nopick' | 'exact' | 'correct' | 'miss';
+export type KoMissReason = 'no_bracket' | 'wrong_matchup' | 'wrong_winner';
 export interface MatchGrade {
   status: GradeStatus;
   points: number;
+  missReason?: KoMissReason;
 }
 
 // ── Group-stage grading (outcome +1, exact +3) ──
@@ -53,18 +55,22 @@ export function gradeKoMatch(
   if (!offHome || !offAway) return { status: 'pending', points: 0 };
 
   if (!pick || pick.h == null || pick.a == null) return { status: 'nopick', points: 0 };
-  if (!myTeams || !myTeams.home || !myTeams.away) return { status: 'miss', points: 0 };
+  if (!myTeams || !myTeams.home || !myTeams.away) {
+    return { status: 'miss', points: 0, missReason: 'no_bracket' };
+  }
 
   // GATE: predicted matchup must equal the official one (order-agnostic).
   const sameMatchup =
     (myTeams.home === offHome && myTeams.away === offAway) ||
     (myTeams.home === offAway && myTeams.away === offHome);
-  if (!sameMatchup) return { status: 'miss', points: 0 };
+  if (!sameMatchup) return { status: 'miss', points: 0, missReason: 'wrong_matchup' };
 
   // Winner must match (ET/pens winner on a predicted draw).
   const predicted =
     pick.h === pick.a ? pick.et || null : pick.h > pick.a ? myTeams.home : myTeams.away;
-  if (!predicted || predicted !== res.winner) return { status: 'miss', points: 0 };
+  if (!predicted || predicted !== res.winner) {
+    return { status: 'miss', points: 0, missReason: 'wrong_winner' };
+  }
 
   const def = POINTS[round as Exclude<Round, 'group'>];
   if (!def) return { status: 'miss', points: 0 };
@@ -76,6 +82,13 @@ export function gradeKoMatch(
     return { status: 'exact', points: def.exact };
   }
   return { status: 'correct', points: def.outcome };
+}
+
+export function koMissLabel(reason: KoMissReason | undefined): string {
+  if (reason === 'wrong_matchup') return 'Wrong matchup';
+  if (reason === 'wrong_winner') return 'Wrong winner';
+  if (reason === 'no_bracket') return 'Bracket gap';
+  return 'Miss';
 }
 export function calcScores(pool: PoolData): ScoredParticipant[] {
   const settings = pool.settings || ({} as PoolData['settings']);
@@ -101,7 +114,7 @@ export function calcScores(pool: PoolData): ScoredParticipant[] {
     const results = Object.fromEntries(pool.matches.map((m) => [m.id, m.result]));
     for (const m of pool.matches) {
       if (m.round === 'group') continue;
-      const myTeams = resolveRealKoTeams(m.id, results, pool.koBracket);
+      const myTeams = resolveKoTeams(m.id, koPicks, pool.koBracket);
       const grade = gradeKoMatch(m.round, koPicks[m.id], myTeams, m.result);
       koPoints += grade.points;
       if (grade.status === 'exact') exactCount++;

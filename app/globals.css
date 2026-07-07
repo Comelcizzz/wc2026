@@ -2398,6 +2398,29 @@ label.lbl {
 .all-picks-pick-row.line-correct { border-left-color: var(--green); background: rgba(25, 195, 125, .05); }
 .all-picks-pick-row.line-exact { border-left-color: var(--gold); background: rgba(245, 181, 68, .07); }
 .all-picks-pick-row.line-wrong { border-left-color: var(--red); background: rgba(255, 90, 82, .04); }
+.all-picks-pick-row.matchup-miss {
+  border-left-color: #e8a43a;
+  background: rgba(232, 164, 58, .06);
+}
+.all-picks-bracket-teams {
+  color: var(--muted);
+  line-height: 1.3;
+}
+.all-picks-bracket-teams.warn {
+  color: #f0c06a;
+  font-weight: 700;
+}
+.all-picks-rule-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(232, 164, 58, .28);
+  background: rgba(232, 164, 58, .06);
+}
 .all-picks-pick-player {
   grid-area: player;
   display: flex;

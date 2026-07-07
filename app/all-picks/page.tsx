@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import TeamFlag from '@/components/TeamFlag';
 import { resolveKoTeams, resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import { displayName } from '@/lib/flair';
-import { gradeGroupMatch, gradeKoMatch, type GradeStatus } from '@/lib/scoring';
+import { gradeGroupMatch, gradeKoMatch, koMissLabel, type GradeStatus } from '@/lib/scoring';
 import { GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS } from '@/lib/tournament';
 import { usePool } from '@/lib/usePool';
 import type { Match, Round, ScorePick } from '@/lib/types';
@@ -15,10 +15,14 @@ type PageTab = 'group' | Round;
 
 const PAGE_TABS: PageTab[] = ['group', ...KO_ROUNDS];
 
-function gradeLabel(status: GradeStatus, points: number): { cls: string; txt: string } {
+function gradeLabel(
+  status: GradeStatus,
+  points: number,
+  missReason?: Parameters<typeof koMissLabel>[0],
+): { cls: string; txt: string } {
   if (status === 'exact') return { cls: 'exact', txt: `Exact +${points}` };
   if (status === 'correct') return { cls: 'correct', txt: points > 0 ? `+${points}` : 'Correct' };
-  if (status === 'miss') return { cls: 'wrong', txt: 'Miss' };
+  if (status === 'miss') return { cls: 'wrong', txt: koMissLabel(missReason) };
   if (status === 'nopick') return { cls: '', txt: 'No pick' };
   return { cls: '', txt: '' };
 }
@@ -32,6 +36,10 @@ function ReadOnlyPickRow({
   isKo,
   home,
   away,
+  bracketHome,
+  bracketAway,
+  officialHome,
+  officialAway,
 }: {
   name: string;
   pick: ScorePick | { h: number; a: number } | undefined;
@@ -40,16 +48,35 @@ function ReadOnlyPickRow({
   isKo: boolean;
   home?: string | null;
   away?: string | null;
+  bracketHome?: string | null;
+  bracketAway?: string | null;
+  officialHome?: string | null;
+  officialAway?: string | null;
 }) {
   const hasH = pick && Number.isInteger(pick.h);
   const hasA = pick && Number.isInteger(pick.a);
   const isDraw = hasH && hasA && pick!.h === pick!.a;
   const et = pick && 'et' in pick ? pick.et : undefined;
+  const matchupMismatch =
+    isKo &&
+    bracketHome &&
+    bracketAway &&
+    officialHome &&
+    officialAway &&
+    !(
+      (bracketHome === officialHome && bracketAway === officialAway) ||
+      (bracketHome === officialAway && bracketAway === officialHome)
+    );
 
   return (
-    <div className={`all-picks-pick-row${gradeCls ? ` line-${gradeCls}` : ''}`}>
+    <div className={`all-picks-pick-row${gradeCls ? ` line-${gradeCls}` : ''}${matchupMismatch ? ' matchup-miss' : ''}`}>
       <div className="all-picks-pick-player">
         <strong>{displayName(name)}</strong>
+        {isKo && bracketHome && bracketAway ? (
+          <span className={`all-picks-bracket-teams small${matchupMismatch ? ' warn' : ''}`}>
+            Your bracket: {bracketHome} vs {bracketAway}
+          </span>
+        ) : null}
         {gradeTxt ? <span className={`result-badge ${gradeCls}`}>{gradeTxt}</span> : null}
       </div>
       <div className="all-picks-pick-fields" aria-label={`${name} predicted score`}>
@@ -321,6 +348,16 @@ function AllPicksContent() {
                 )}
               </div>
 
+              {!isGroup && selectedMatch.round !== 'r32' && (
+                <div className="all-picks-rule-hint">
+                  <span className="pill">R16+ rule</span>
+                  <span className="muted small">
+                    Points count only when <strong>your bracket</strong> had the same teams in this slot as the real match.
+                    A correct score for different teams = no points.
+                  </span>
+                </div>
+              )}
+
               <div className="all-picks-viewonly-banner">
                 <span className="pill">View only</span>
                 <span className="muted small">
@@ -346,7 +383,7 @@ function AllPicksContent() {
                         myTeams,
                         matchResult,
                       );
-                  const { cls, txt } = gradeLabel(grade.status, grade.points);
+                  const { cls, txt } = gradeLabel(grade.status, grade.points, grade.missReason);
                   const rowHome = isGroup ? selectedMatch.home : myTeams?.home ?? officialTeams?.home;
                   const rowAway = isGroup ? selectedMatch.away : myTeams?.away ?? officialTeams?.away;
                   return (
@@ -359,6 +396,10 @@ function AllPicksContent() {
                       isKo={!isGroup}
                       home={rowHome}
                       away={rowAway}
+                      bracketHome={myTeams?.home}
+                      bracketAway={myTeams?.away}
+                      officialHome={isGroup ? selectedMatch.home : officialTeams?.home}
+                      officialAway={isGroup ? selectedMatch.away : officialTeams?.away}
                     />
                   );
                 })}
