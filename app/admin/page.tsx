@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { getPool, postJSON, type PoolResponse } from '@/lib/clientApi';
+import { invalidatePoolCache } from '@/lib/usePool';
 import { resolveRealKoTeams } from '@/lib/bracket';
 import { TEAMS, KO_MATCH_IDS, KO_META, BRACKET_COLUMNS, GROUPS } from '@/lib/tournament';
 import { groupTable } from '@/lib/groupStandings';
@@ -56,6 +57,7 @@ export default function AdminPage() {
   async function act(body: any, okMsg = 'Saved') {
     const r = await postJSON('/api/admin', body);
     if (r.ok) {
+      invalidatePoolCache();
       flash(okMsg, 'ok');
       refresh();
     } else {
@@ -667,6 +669,14 @@ function ResultRow({
   const winnerOptions = isR32 ? ([fixture?.home, fixture?.away].filter(Boolean) as string[]) : teamOptions;
   const displayHome = isR32 ? fixture?.home || '' : home;
   const displayAway = isR32 ? fixture?.away || '' : away;
+
+  useEffect(() => {
+    const h = Number(hg);
+    const a = Number(ag);
+    if (!Number.isInteger(h) || !Number.isInteger(a)) return;
+    if (h > a && displayHome) setWinner(displayHome);
+    else if (a > h && displayAway) setWinner(displayAway);
+  }, [hg, ag, displayHome, displayAway]);
 
   return (
     <div className="result-card">
