@@ -13,6 +13,11 @@ export function getCachedPool(): PoolResponse | null {
   return cache;
 }
 
+export function invalidatePoolCache() {
+  cache = null;
+  inflight = null;
+}
+
 export function usePool() {
   const [pool, setPool] = useState<PoolResponse | null>(cache);
   const [err, setErr] = useState('');
@@ -37,6 +42,14 @@ export function usePool() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => {
+      refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   async function refresh() {

@@ -10,7 +10,7 @@ import { resolveRealKoTeams, resultsFromMatches } from '@/lib/bracket';
 import { isMatchPickLocked } from '@/lib/matchSchedule';
 import { canPickMatch, getMaxOpenPickRound, isRoundAccessible } from '@/lib/roundPick';
 import { computeTotalGoals } from '@/lib/tiebreaker';
-import { gradeGroupMatch, gradeKoMatch, koMissLabel } from '@/lib/scoring';
+import { gradeGroupMatch, gradeKoMatch, koMissLabel, koWinnerFromResult } from '@/lib/scoring';
 import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS } from '@/lib/tournament';
 import TeamFlag from '@/components/TeamFlag';
 import { groupTable } from '@/lib/groupStandings';
@@ -256,7 +256,7 @@ export default function PicksPage() {
   // per-match results strip and the points summary.
   const koResults: Record<string, MatchResult> = {};
   for (const m of pool.matches) {
-    if (m.round !== 'group' && m.result && m.result.winner) koResults[m.id] = m.result;
+    if (m.round !== 'group' && m.result && koWinnerFromResult(m.result)) koResults[m.id] = m.result;
   }
 
   // Points the logged-in player has earned so far, computed with the SAME
@@ -926,7 +926,7 @@ function ListMatchCard({
   const locked = !pickable || !ready;
   const isDraw = pick && Number.isInteger(pick.h) && Number.isInteger(pick.a) && pick.h === pick.a;
   const meta = KO_META[match.id];
-  const grade = result && result.winner ? gradeKoMatch(match.round, pick, result) : null;
+  const grade = result && koWinnerFromResult(result) ? gradeKoMatch(match.round, pick, result) : null;
   const graded =
     grade && (grade.status === 'exact' || grade.status === 'correct' || grade.status === 'miss')
       ? gradeChrome(grade).cls
@@ -998,7 +998,7 @@ function KoResultStrip({
   pick: KoPicks[string];
   result?: MatchResult;
 }) {
-  if (!result || !result.winner || result.homeGoals == null || result.awayGoals == null) return null;
+  if (!result || !koWinnerFromResult(result) || result.homeGoals == null || result.awayGoals == null) return null;
   const grade = gradeKoMatch(match.round, pick, result);
   const { cls, txt } = gradeChrome(grade);
   return (

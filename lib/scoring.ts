@@ -43,18 +43,21 @@ export function gradeKoMatch(
   pick: ScorePick | undefined,
   res: MatchResult | undefined,
 ): MatchGrade {
-  if (!res || !res.winner || res.homeGoals == null || res.awayGoals == null) {
+  if (!res || res.homeGoals == null || res.awayGoals == null) {
     return { status: 'pending', points: 0 };
   }
   const offHome = res.home;
   const offAway = res.away;
   if (!offHome || !offAway) return { status: 'pending', points: 0 };
 
+  const winner = koWinnerFromResult(res);
+  if (!winner) return { status: 'pending', points: 0 };
+
   if (!pick || pick.h == null || pick.a == null) return { status: 'nopick', points: 0 };
 
   const predicted =
     pick.h === pick.a ? pick.et || null : pick.h > pick.a ? offHome : offAway;
-  if (!predicted || predicted !== res.winner) {
+  if (!predicted || predicted !== winner) {
     return { status: 'miss', points: 0, missReason: 'wrong_winner' };
   }
 
@@ -70,6 +73,15 @@ export function gradeKoMatch(
 export function koMissLabel(reason: KoMissReason | undefined): string {
   if (reason === 'wrong_winner') return 'Wrong winner';
   return 'Miss';
+}
+
+/** Resolve the advancing team from a stored KO result (explicit winner or scoreline). */
+export function koWinnerFromResult(res: MatchResult): string | null {
+  if (res.winner) return res.winner;
+  if (!res.home || !res.away || res.homeGoals == null || res.awayGoals == null) return null;
+  if (res.homeGoals > res.awayGoals) return res.home;
+  if (res.awayGoals > res.homeGoals) return res.away;
+  return null;
 }
 export function calcScores(pool: PoolData): ScoredParticipant[] {
   const settings = pool.settings || ({} as PoolData['settings']);
