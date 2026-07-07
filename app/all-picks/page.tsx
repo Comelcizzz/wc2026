@@ -63,9 +63,15 @@ function ReadOnlyPickRow({
       </div>
       {isKo && isDraw && home && away && (
         <div className="all-picks-et-row">
-          <span className="muted small">ET / pens</span>
-          <span className={`et-pill view-only${et === home ? ' sel' : ''}`}>{home}</span>
-          <span className={`et-pill view-only${et === away ? ' sel' : ''}`}>{away}</span>
+          <span className="all-picks-et-label">ET / pens winner</span>
+          {et ? (
+            <span className="et-winner-badge view-only">
+              <TeamFlag team={et} size={16} />
+              {et}
+            </span>
+          ) : (
+            <span className="et-winner-badge view-only missing">Not picked</span>
+          )}
         </div>
       )}
     </div>
