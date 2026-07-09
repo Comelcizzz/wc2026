@@ -15,6 +15,7 @@ import { BRACKET_COLUMNS, GROUPS, KO_MATCH_IDS, KO_META, KO_ROUNDS, ROUND_LABELS
 import TeamFlag from '@/components/TeamFlag';
 import { groupTable } from '@/lib/groupStandings';
 import { coolPhrase, displayName } from '@/lib/flair';
+import { canAccessAllPicks } from '@/lib/allPicksAccess';
 import type { KoPicks, GroupPicks, Match, MatchResult, Round } from '@/lib/types';
 
 type Toast = { msg: string; kind: 'ok' | 'err' } | null;
@@ -387,7 +388,7 @@ export default function PicksPage() {
           )}
 
           {pageTab === 'group' ? (
-            <GroupPicksView matches={groupMatches} picks={myGroupPicks} />
+            <GroupPicksView matches={groupMatches} picks={myGroupPicks} canSeeAllPicks={canAccessAllPicks(name)} />
           ) : !bracketOpen && !adminLocked ? (
             <div className="card">
               <strong>The knockout bracket is not open yet.</strong>
@@ -439,6 +440,7 @@ export default function PicksPage() {
                   koResultsMap={koResultsMap}
                   commentCounts={pool.commentCounts || {}}
                   identified={identified}
+                  canSeeAllPicks={canAccessAllPicks(name)}
                 />
               )}
 
@@ -691,7 +693,15 @@ function PointsSummary({
   );
 }
 
-function GroupPicksView({ matches, picks }: { matches: Match[]; picks: GroupPicks }) {
+function GroupPicksView({
+  matches,
+  picks,
+  canSeeAllPicks,
+}: {
+  matches: Match[];
+  picks: GroupPicks;
+  canSeeAllPicks?: boolean;
+}) {
   const groupKeys = Object.keys(GROUPS);
   const [group, setGroup] = useState(groupKeys[0]);
 
@@ -793,10 +803,14 @@ function GroupPicksView({ matches, picks }: { matches: Match[]; picks: GroupPick
               <div className={`gp-row${grade.cls ? ` line-${grade.cls}` : ''}`} key={m.id}>
                 <span className="gp-date">
                   {m.date}
-                  {' · '}
-                  <Link href={`/all-picks?m=${m.id}`} className="gp-all-picks-link">
-                    All picks
-                  </Link>
+                  {canSeeAllPicks && (
+                    <>
+                      {' · '}
+                      <Link href={`/all-picks?m=${m.id}`} className="gp-all-picks-link">
+                        All picks
+                      </Link>
+                    </>
+                  )}
                 </span>
                 <span className="gp-team home">
                   <TeamFlag team={m.home} size={15} />
@@ -836,6 +850,7 @@ function RoundView({
   koResultsMap,
   commentCounts,
   identified,
+  canSeeAllPicks,
 }: {
   round: Round;
   resolved: Record<string, { home: string | null; away: string | null } | null>;
@@ -848,6 +863,7 @@ function RoundView({
   koResultsMap: Record<string, MatchResult | undefined>;
   commentCounts: Record<string, number>;
   identified: boolean;
+  canSeeAllPicks?: boolean;
 }) {
   const matches = useMemo(() => KO_MATCH_IDS.filter((m) => m.round === round), [round]);
   const ready = matches.filter((m) => {
@@ -889,6 +905,7 @@ function RoundView({
                 pickable={!adminLocked && canPickMatch(match.id, pool.koBracket, koResultsMap)}
                 commentCount={commentCounts[match.id] || 0}
                 identified={identified}
+                canSeeAllPicks={canSeeAllPicks}
               />
             ))}
           </div>
@@ -908,6 +925,7 @@ function ListMatchCard({
   pickable,
   commentCount,
   identified,
+  canSeeAllPicks,
 }: {
   match: { id: string; round: Round; label: string };
   teams: { home: string | null; away: string | null } | null;
@@ -918,6 +936,7 @@ function ListMatchCard({
   pickable?: boolean;
   commentCount?: number;
   identified?: boolean;
+  canSeeAllPicks?: boolean;
 }) {
   const home = teams?.home;
   const away = teams?.away;
@@ -938,9 +957,11 @@ function ListMatchCard({
         <span>M{meta?.m ?? match.id}</span>
         <span>{meta?.date}</span>
         {ready && <MatchPickCountdown matchId={match.id} />}
-        <Link href={`/all-picks?m=${match.id}`} className="match-all-picks-link">
-          All picks
-        </Link>
+        {canSeeAllPicks && (
+          <Link href={`/all-picks?m=${match.id}`} className="match-all-picks-link">
+            All picks
+          </Link>
+        )}
       </div>
       <div className="score-row">
         <span className={`team-name${!home ? ' tbd' : ''}`}>
