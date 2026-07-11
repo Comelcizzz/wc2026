@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "backup": "node scripts/backup-full.mjs",
+    "backup:live": "node scripts/backup-full.mjs --from-url https://wc2026-rose-zeta.vercel.app",
+    "migrate": "node scripts/migrate-supabase.mjs",
+    "migrate:write": "node scripts/migrate-supabase.mjs --write"
   },
   "dependencies": {
     "next": "14.2.35",

@@ -96,6 +96,40 @@ reachable from the public Supabase key.
 5. Players log in on `/picks` and submit the full bracket before the deadline.
 6. As matches finish, enter real results in `/admin`.
 
+## Backup & Supabase migration
+
+Before moving to a new Supabase project, save a full snapshot:
+
+```powershell
+# Best: direct read from current Supabase (includes passwords + emails)
+Copy-Item .env.example .env.local
+# fill SUPABASE_URL, SUPABASE_ANON_KEY, POOL_ID
+npm run backup
+
+# Fallback: live site API (picks, results, chat — no passwords)
+npm run backup:live
+```
+
+Files land in `./backups/` (gitignored). Use `scripts/supabase-schema.sql` on the
+new project, then:
+
+```powershell
+# Dry-run export from source
+npm run migrate
+
+# Copy to new Supabase
+# TARGET_SUPABASE_URL=...
+# TARGET_SUPABASE_ANON_KEY=...
+# TARGET_POOL_ID=TVZAQN8G
+npm run migrate:write
+
+# Or import a saved backup file
+node scripts/migrate-supabase.mjs --from-backup backups/full-backup-....json --write
+```
+
+After migration, update Vercel env vars (`SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`POOL_ID`) to the new project.
+
 ## GitHub / Deploy
 
 Do not commit `.env.local`; it is ignored by `.gitignore`.

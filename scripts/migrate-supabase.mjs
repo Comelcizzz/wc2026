@@ -11,8 +11,9 @@
  *   TARGET_POOL_ID=TVZAQN8G          (same or new id)
  *
  * Usage:
- *   node scripts/migrate-supabase.mjs              # dry-run (read only)
+ *   node scripts/migrate-supabase.mjs              # dry-run (read from source Supabase)
  *   node scripts/migrate-supabase.mjs --write      # copy to target
+ *   node scripts/migrate-supabase.mjs --from-backup backups/full-backup-....json --write
  *
  * The target row is upserted by id. Create the table + RLS on the new project first
  * (see README.md Supabase RLS section).
@@ -62,9 +63,19 @@ async function writeRow(url, key, row) {
   if (!res.ok) throw new Error(`Target write failed (${res.status}): ${await res.text()}`);
 }
 
+function readBackupFile(path) {
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  if (raw.row?.data) return raw.row;
+  if (raw.data) return { id: raw.poolId || raw.id || 'TVZAQN8G', data: raw.data };
+  if (raw.id && raw.data) return raw;
+  throw new Error('Unrecognized backup JSON — run scripts/backup-full.mjs first');
+}
+
 async function main() {
   const env = loadEnv();
   const write = process.argv.includes('--write');
+  const fromBackupIdx = process.argv.indexOf('--from-backup');
+  const backupPath = fromBackupIdx >= 0 ? process.argv[fromBackupIdx + 1] : null;
 
   const srcUrl = env.SOURCE_SUPABASE_URL || env.SUPABASE_URL;
   const srcKey = env.SOURCE_SUPABASE_SERVICE_ROLE_KEY || env.SOURCE_SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
@@ -72,14 +83,22 @@ async function main() {
 
   const tgtUrl = env.TARGET_SUPABASE_URL;
   const tgtKey = env.TARGET_SUPABASE_SERVICE_ROLE_KEY || env.TARGET_SUPABASE_ANON_KEY;
-  const tgtId = env.TARGET_POOL_ID || srcId;
 
-  if (!srcUrl || !srcKey || !srcId) {
-    throw new Error('Set SOURCE_SUPABASE_URL, SOURCE key, SOURCE_POOL_ID (or SUPABASE_* / POOL_ID)');
+  let row;
+  let effectiveSrcId = srcId;
+  if (backupPath) {
+    console.log(`Reading pool from backup file: ${backupPath}`);
+    row = readBackupFile(backupPath);
+    effectiveSrcId = row.id || effectiveSrcId || 'TVZAQN8G';
+  } else {
+    if (!srcUrl || !srcKey || !srcId) {
+      throw new Error('Set SOURCE_SUPABASE_URL, SOURCE key, SOURCE_POOL_ID (or use --from-backup)');
+    }
+    console.log(`Reading pool ${srcId} from source…`);
+    row = await readRow(srcUrl, srcKey, srcId);
   }
 
-  console.log(`Reading pool ${srcId} from source…`);
-  const row = await readRow(srcUrl, srcKey, srcId);
+  const tgtId = env.TARGET_POOL_ID || effectiveSrcId || srcId;
   const data = row.data || row;
   const participants = data.participants || [];
   const results = (data.matches || []).filter((m) => m.result?.homeGoals != null).length;
@@ -87,7 +106,7 @@ async function main() {
   const dir = join(root, 'backups');
   mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const file = join(dir, `migrate-export-${srcId}-${stamp}.json`);
+  const file = join(dir, `migrate-export-${effectiveSrcId || srcId || 'pool'}-${stamp}.json`);
   writeFileSync(file, JSON.stringify(row, null, 2), 'utf8');
 
   console.log(`\n✓ Exported snapshot: ${file}`);
